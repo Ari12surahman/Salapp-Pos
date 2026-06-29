@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+}
+
+/* 
+  Industrial Brutalist UI - Swiss Print Light Mode
+  Substrate: #F4F4F0
+  Ink: #050505
+  Accent (Hijau Pesantren): #064E3B (Emerald 900)
+*/
+:root {
+  --background: #F4F4F0;
+  --foreground: #050505;
+  --card: #EAE8E3;
+  --card-foreground: #050505;
+  --popover: #EAE8E3;
+  --popover-foreground: #050505;
+  --primary: #064E3B; /* Hijau Pesantren */
+  --primary-foreground: #F4F4F0;
+  --secondary: #EAE8E3;
+  --secondary-foreground: #050505;
+  --muted: #EAE8E3;
+  --muted-foreground: #52525B;
+  --accent: #EAE8E3;
+  --accent-foreground: #050505;
+  --destructive: #E61919;
+  --destructive-foreground: #F4F4F0;
+  --border: #050505; /* Solid sharp borders */
+  --input: #050505;
+  --ring: #064E3B;
+}
+
+.dark {
+  /* Tactical Telemetry Dark Mode */
+  --background: #0A0A0A;
+  --foreground: #EAEAEA;
+  --card: #121212;
+  --card-foreground: #EAEAEA;
+  --popover: #121212;
+  --popover-foreground: #EAEAEA;
+  --primary: #047857; /* Bright Hijau Pesantren */
+  --primary-foreground: #0A0A0A;
+  --secondary: #1F1F1F;
+  --secondary-foreground: #EAEAEA;
+  --muted: #1F1F1F;
+  --muted-foreground: #A1A1AA;
+  --accent: #1F1F1F;
+  --accent-foreground: #EAEAEA;
+  --destructive: #E61919;
+  --destructive-foreground: #EAEAEA;
+  --border: #EAEAEA;
+  --input: #EAEAEA;
+  --ring: #047857;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Brutalist layout utilities */
+  .industrial-grid {
+    display: grid;
+    gap: 1px;
+    background-color: var(--border);
+  }
+  .industrial-grid > * {
+    background-color: var(--background);
+  }
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+  body {
+    background-color: white;
+    color: black;
+    margin: 0;
+    padding: 0;
+  }
+}
