@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function ProdukPage() {
+  const queryClient = useQueryClient();
   const user = useAuthStore(state => state.user);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -108,6 +110,7 @@ export default function ProdukPage() {
     try {
       await api.post('hapusProduk', { id });
       toast.success("Produk berhasil dihapus!");
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       await fetchProducts();
     } catch (err) {
       toast.error("Gagal menghapus produk.");
@@ -132,7 +135,7 @@ export default function ProdukPage() {
       toast.success(isEdit ? "Produk Berhasil Diubah!" : "Produk Berhasil Ditambahkan!");
       setIsModalOpen(false);
       resetForm();
-      
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       await fetchProducts();
     } catch (error: any) {
       toast.error((isEdit ? "Gagal mengubah produk. " : "Gagal menambahkan produk. ") + (error.message || ""));
