@@ -13,19 +13,45 @@ import { Smartphone } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const currentUser = useAuthStore((state) => state.user);
+  
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // If already authenticated, redirect immediately
+    if (isAuthenticated && currentUser) {
+      const perms = currentUser.permissions || "pos";
+      const permsArray = perms.split(",");
+      if (permsArray.includes("dashboard")) {
+        router.push("/");
+      } else {
+        const dashboardRoutes = ["produk", "santri", "warung", "topup", "laporan", "pengaturan"];
+        const firstRoute = dashboardRoutes.find(r => permsArray.includes(r));
+        if (firstRoute) {
+          router.push(`/${firstRoute}`);
+        } else {
+          router.push("/pos");
+        }
+      }
+    }
+
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+      setIsInstalled(true);
+    }
+
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-  }, []);
+  }, [isAuthenticated, currentUser, router]);
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {
@@ -33,6 +59,7 @@ export default function LoginPage() {
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         setDeferredPrompt(null);
+        setIsInstalled(true);
       }
     } else {
       toast.info("Untuk install di HP: Buka menu browser (titik tiga) lalu pilih 'Tambahkan ke Layar Utama' atau 'Add to Home Screen'.");
@@ -47,21 +74,7 @@ export default function LoginPage() {
       if (res && res.status === "success" && res.user) {
         localStorage.setItem("userPermissions", res.user.permissions || "pos");
         login(res.user);
-        setTimeout(() => {
-          const perms = res.user.permissions || "pos";
-          const permsArray = perms.split(",");
-          if (permsArray.includes("dashboard")) {
-            router.push("/");
-          } else {
-            const dashboardRoutes = ["produk", "santri", "warung", "topup", "laporan", "pengaturan"];
-            const firstRoute = dashboardRoutes.find(r => permsArray.includes(r));
-            if (firstRoute) {
-              router.push(`/${firstRoute}`);
-            } else {
-              router.push("/pos");
-            }
-          }
-        }, 100);
+        // router.push will happen via useEffect above once isAuthenticated becomes true
       } else {
         toast.error("Login Gagal: " + (res?.message || "Username atau Password salah"));
       }
@@ -71,6 +84,9 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // If already authenticated, don't show the login form (prevents flicker before redirect)
+  if (isAuthenticated) return null;
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-4">
@@ -116,14 +132,16 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      <Button 
-        variant="outline" 
-        onClick={handleInstallApp} 
-        className="w-full h-12 border-2 font-bold flex items-center gap-2"
-      >
-        <Smartphone className="w-4 h-4" />
-        INSTALL APLIKASI
-      </Button>
+      {!isInstalled && (
+        <Button 
+          variant="outline" 
+          onClick={handleInstallApp} 
+          className="w-full h-12 border-2 font-bold flex items-center gap-2"
+        >
+          <Smartphone className="w-4 h-4" />
+          INSTALL APLIKASI
+        </Button>
+      )}
     </div>
   );
 }
