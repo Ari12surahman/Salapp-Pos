@@ -236,38 +236,41 @@ export const supabaseServices = {
   
   login: async (payload: any) => {
     const cleanUsername = payload.username.trim();
-    const email = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.com`;
     
-    // 1. Authenticate with Supabase Auth
+    // 1. Fetch User Profile from public.Users first to get the correct Email
+    const { data, error } = await supabase.from('Users').select('*').ilike('Username', cleanUsername);
+    
+    if (error || !data || data.length === 0) {
+      console.error("Profile Fetch Error:", error || "User not found in public.Users");
+      return { status: 'error', message: "Username tidak ditemukan." };
+    }
+    
+    const userRow = data[0];
+    
+    // Determine actual email for auth
+    const fallbackNew = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.com`;
+    const fallbackOld = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.local`;
+    const actualEmail = userRow.Email || userRow.email || fallbackNew;
+
+    // 2. Authenticate with Supabase Auth
     let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email,
+      email: actualEmail,
       password: payload.password,
     });
     
     if (authError || !authData.user) {
-      // Fallback for older accounts that were created with .local
-      const oldEmail = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.local`;
+      // Fallback for older accounts
       const { data: fallbackData, error: fallbackError } = await supabase.auth.signInWithPassword({
-        email: oldEmail,
+        email: fallbackOld,
         password: payload.password,
       });
 
       if (fallbackError || !fallbackData.user) {
         console.error("Login Error from Supabase Auth:", authError, fallbackError);
-        return { status: 'error', message: "Username atau Password salah!" };
+        return { status: 'error', message: "Password salah!" };
       }
       authData = fallbackData;
     }
-    
-    // 2. Fetch User Profile from public.Users
-    const { data, error } = await supabase.from('Users').select('*').ilike('Username', cleanUsername);
-    
-    if (error || !data || data.length === 0) {
-      console.error("Profile Fetch Error:", error || "User not found in public.Users");
-      return { status: 'error', message: "Gagal mengambil profil user. Pastikan data user ada di tabel Users." };
-    }
-    
-    const userRow = data[0];
     
     // 3. Fetch permissions from Roles
     let permissions = "pos"; // default
