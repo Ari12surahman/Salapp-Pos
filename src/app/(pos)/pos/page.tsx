@@ -589,6 +589,40 @@ export default function PosPage() {
                 className="pl-9 pr-9 bg-background uppercase font-mono"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && search.trim() !== '') {
+                    const exactBarcode = products.find((p: any) => p.barcode === search);
+                    if (exactBarcode) {
+                      if (Number(exactBarcode.stock) > 0) {
+                        addToCart(exactBarcode);
+                        playBeep();
+                        setSearch("");
+                      } else {
+                        toast.error("Stok habis!");
+                        playError();
+                      }
+                      return;
+                    }
+                    if (filteredProducts.length === 1) {
+                      const p = filteredProducts[0];
+                      if (Number(p.stock) > 0) {
+                        addToCart(p);
+                        playBeep();
+                        setSearch("");
+                      } else {
+                        toast.error("Stok habis!");
+                        playError();
+                      }
+                      return;
+                    }
+                    if (filteredProducts.length > 1) {
+                      toast.warning("Ada beberapa produk yang mirip. Silakan klik produk yang dimaksud.");
+                    } else {
+                      toast.error("Produk tidak ditemukan!");
+                      playError();
+                    }
+                  }
+                }}
                 autoFocus
               />
               <Button 
