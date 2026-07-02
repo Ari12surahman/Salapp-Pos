@@ -16,13 +16,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "POS SalApp",
+  title: "SalApp POS",
   description: "Point of Sale for Pondok Pesantren",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "POS SalApp",
+    title: "SalApp POS",
   },
 };
 

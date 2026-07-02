@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'POS SalApp',
-    short_name: 'SalApp',
+    name: 'SalApp POS',
+    short_name: 'SalApp POS',
     description: 'Point of Sale for Pondok Pesantren',
     start_url: '/',
     display: 'standalone',
