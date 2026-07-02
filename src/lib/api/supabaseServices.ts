@@ -410,11 +410,17 @@ export const supabaseServices = {
     }
   },
   editUser: async (payload: any) => {
-    const { error } = await supabase.from('Users').update({
-      Username: payload.username, Name: payload.name, Role: payload.role, WarungID: payload.warungId
-    }).eq('id', payload.id);
-    if (error) return { status: 'error', message: error.message };
-    return { status: 'success' };
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { status: 'error', message: e.message };
+    }
   },
   hapusUser: async (payload: any) => {
     const id = typeof payload === 'string' ? payload : payload.id;

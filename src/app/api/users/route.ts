@@ -49,3 +49,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'error', message: error.message });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const payload = await request.json();
+    const { id, username, name, role, warungId, password } = payload;
+
+    // 1. Update public.Users table
+    const { error: dbError } = await supabaseAdmin.from('Users').update({
+      Username: username,
+      Name: name,
+      Role: role,
+      WarungID: warungId
+    }).eq('id', id).or(`ID.eq.${id}`); // Just to be safe with casing
+
+    if (dbError) {
+      return NextResponse.json({ status: 'error', message: dbError.message });
+    }
+
+    // 2. If a new password is provided, update it in Supabase Auth
+    if (password && password.trim() !== '') {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: password
+      });
+      if (authError) {
+        return NextResponse.json({ status: 'error', message: "Profil tersimpan tapi gagal ganti password: " + authError.message });
+      }
+    }
+
+    return NextResponse.json({ status: 'success' });
+  } catch (error: any) {
+    return NextResponse.json({ status: 'error', message: error.message });
+  }
+}
