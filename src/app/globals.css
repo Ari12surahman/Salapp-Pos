@@ -108,6 +108,10 @@
   .industrial-grid > * {
     background-color: var(--background);
   }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 @media print {

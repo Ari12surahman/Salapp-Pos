@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -41,10 +42,19 @@ export default function DashboardLayout({
       )}
 
       <div className="flex-1 flex flex-col min-w-0 w-full relative">
-        <Topbar onMenuClick={() => setMobileMenuOpen(true)} />
-        <main className="flex-1 overflow-auto">
+        <div className="hidden md:block">
+          <Topbar onMenuClick={() => setMobileMenuOpen(true)} />
+        </div>
+        {/* On mobile, we might want to keep the title in topbar or just remove it completely. 
+            Often apps keep a small top header, but Topbar is quite big. Let's keep it but simplified or hidden. 
+            For now, we hide Topbar completely on mobile because BottomNav is the primary navigation,
+            and screen estate is precious. */}
+        
+        <main className="flex-1 overflow-auto pb-16 md:pb-0">
           {children}
         </main>
+
+        <BottomNav onMenuClick={() => setMobileMenuOpen(true)} />
       </div>
     </div>
   );
