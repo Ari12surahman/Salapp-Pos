@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from 'sonner';
 import { Settings, User, Store, Bell, Printer, Shield, Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
 
@@ -163,7 +164,11 @@ export default function PengaturanPage() {
   };
 
   const handleDeleteClick = async (type: "user" | "role", id: string) => {
-    if (!window.confirm(`Yakin ingin menghapus ${type} ini?`)) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: `HAPUS ${type.toUpperCase()}`,
+      message: `Yakin ingin menghapus ${type} ini secara permanen?`,
+    });
+    if (!confirmed) return;
     try {
       await api.post(type === "user" ? 'hapusUser' : 'hapusRole', { id });
       toast.success("Berhasil dihapus!");

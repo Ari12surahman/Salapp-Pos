@@ -6,6 +6,7 @@ import { Download, FileText, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
+import { useConfirmStore } from "@/store/confirmStore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -164,7 +165,11 @@ export default function LaporanPage() {
   };
 
   const handleDelete = async (ids: string[]) => {
-    if (!confirm(`Yakin ingin menghapus ${ids.length} transaksi secara permanen? Saldo tidak akan dikembalikan.`)) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS TRANSAKSI",
+      message: `Yakin ingin menghapus ${ids.length} transaksi secara permanen? Saldo tidak akan dikembalikan.`,
+    });
+    if (!confirmed) return;
     
     setDeleting(true);
     try {

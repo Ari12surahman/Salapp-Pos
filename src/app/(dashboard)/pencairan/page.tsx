@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wallet, Info, CheckCircle2, Clock, Loader2 } from "lucide-react";
@@ -49,9 +50,14 @@ export default function PencairanPage() {
   const totalDanaEligible = eligibleList.reduce((sum: number, item: any) => sum + (Number(item.totalharga || item.TotalHarga) || 0), 0);
   const trxIds = eligibleList.map((item: any) => item.trxid || item.TrxID).filter(Boolean);
 
-  const handleAjukan = () => {
+  const handleAjukan = async () => {
     if (trxIds.length === 0) return;
-    if (confirm(`Anda akan mengajukan pencairan sebesar Rp ${totalDanaEligible.toLocaleString('id-ID')}.\nLanjutkan?`)) {
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "AJUKAN PENCAIRAN",
+      message: `Anda akan mengajukan pencairan sebesar Rp ${totalDanaEligible.toLocaleString('id-ID')}.\n\nLanjutkan proses pencairan?`,
+      confirmText: "YA, AJUKAN"
+    });
+    if (confirmed) {
       ajukanMutation.mutate({
         warungId: user?.warungId,
         trxIds: trxIds,

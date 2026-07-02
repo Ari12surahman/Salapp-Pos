@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Search, Plus, Filter, Edit, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
 import { useQueryClient } from "@tanstack/react-query";
@@ -105,7 +106,11 @@ export default function ProdukPage() {
   };
 
   const handleDeleteClick = async (id: string) => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus produk ini?")) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS PRODUK",
+      message: "Apakah Anda yakin ingin menghapus produk ini secara permanen?",
+    });
+    if (!confirmed) return;
     
     try {
       await api.post('hapusProduk', { id });
@@ -168,7 +173,11 @@ export default function ProdukPage() {
   };
 
   const handleDeleteKategoriClick = async (id: string) => {
-    if (!window.confirm("Hapus kategori ini?")) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS KATEGORI",
+      message: "Apakah Anda yakin ingin menghapus kategori ini?",
+    });
+    if (!confirmed) return;
     try {
       await api.post('hapusKategori', { id });
       toast.success("Kategori dihapus");

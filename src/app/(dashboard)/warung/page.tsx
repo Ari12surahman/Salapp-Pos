@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Plus, Store, Edit, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
 
 export default function WarungPage() {
@@ -45,7 +46,11 @@ export default function WarungPage() {
   };
 
   const handleDeleteClick = async (id: string) => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus warung ini?")) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS WARUNG",
+      message: "Apakah Anda yakin ingin menghapus warung ini secara permanen?",
+    });
+    if (!confirmed) return;
     
     try {
       await api.post('hapusWarung', { id });

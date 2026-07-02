@@ -6,6 +6,7 @@ import { Download, FileText, Loader2, Trash2, Plus, ArrowUpRight, ArrowDownRight
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
+import { useConfirmStore } from "@/store/confirmStore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -167,7 +168,11 @@ export default function CashflowPage() {
   };
 
   const handleDeleteKategori = async (id: string) => {
-    if (!confirm("Hapus kategori ini?")) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS KATEGORI",
+      message: "Yakin ingin menghapus kategori kas ini?",
+    });
+    if (!confirmed) return;
     try {
       await api.post('hapusKategoriKasWarung', { id });
       fetchData();
@@ -177,7 +182,11 @@ export default function CashflowPage() {
   };
 
   const handleDeleteKas = async (ids: string[]) => {
-    if (!confirm(`Hapus ${ids.length} data kas?`)) return;
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS DATA KAS",
+      message: `Yakin ingin menghapus ${ids.length} data kas secara permanen?`,
+    });
+    if (!confirmed) return;
     setDeleting(true);
     try {
       for (const id of ids) {

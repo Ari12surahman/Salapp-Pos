@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useAudio } from "@/hooks/useAudio";
 import { supabase } from "@/lib/supabase";
 import { supabaseServices } from "@/lib/api/supabaseServices";
+import { Button } from "@/components/ui/button";
+import { useConfirmStore } from "@/store/confirmStore";
 import { formatDateTimeID } from "@/lib/utils";
 
 export default function PesananOnlinePage() {
@@ -89,15 +91,24 @@ export default function PesananOnlinePage() {
     onError: () => toast.error("Terjadi kesalahan jaringan.")
   });
 
-  const handleSelesai = (trxIds: string | string[]) => {
+  const handleSelesai = async (trxIds: string | string[]) => {
     const isBulk = Array.isArray(trxIds);
-    if(confirm(isBulk ? `Apakah ${trxIds.length} pesanan ini sudah diambil siswa?` : "Apakah pesanan ini sudah diambil siswa?")) {
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "PESANAN SELESAI",
+      message: isBulk ? `Apakah ${trxIds.length} pesanan ini sudah diambil siswa?` : "Apakah pesanan ini sudah diambil siswa?",
+      confirmText: "YA, SUDAH"
+    });
+    if(confirmed) {
       updateMutation.mutate(trxIds);
     }
   };
 
-  const handleDelete = (trxIds: string[]) => {
-    if(confirm(`Yakin ingin menghapus ${trxIds.length} pesanan yang dipilih? Data akan dihapus permanen.`)) {
+  const handleDelete = async (trxIds: string[]) => {
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS PESANAN",
+      message: `Yakin ingin menghapus ${trxIds.length} pesanan yang dipilih? Data akan dihapus permanen.`,
+    });
+    if(confirmed) {
       deleteMutation.mutate(trxIds);
     }
   };
