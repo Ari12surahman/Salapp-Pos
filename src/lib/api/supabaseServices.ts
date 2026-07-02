@@ -168,17 +168,20 @@ export const supabaseServices = {
     };
   },
 
-  hapusWarung: async (id: string) => {
+  hapusWarung: async (payload: any) => {
+    const id = typeof payload === 'string' ? payload : payload.id;
     const { error } = await supabase.from('Warung').delete().eq('ID', id);
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
-  hapusProduk: async (id: string) => {
+  hapusProduk: async (payload: any) => {
+    const id = typeof payload === 'string' ? payload : payload.id;
     const { error } = await supabase.from('Produk').delete().eq('ID', id);
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
-  hapusKategori: async (id: string) => {
+  hapusKategori: async (payload: any) => {
+    const id = typeof payload === 'string' ? payload : payload.id;
     const { error } = await supabase.from('Kategori').delete().eq('ID', id);
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
@@ -410,7 +413,8 @@ export const supabaseServices = {
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
-  hapusUser: async (id: string) => {
+  hapusUser: async (payload: any) => {
+    const id = typeof payload === 'string' ? payload : payload.id;
     await supabase.from('Users').delete().eq('ID', id);
     return { status: 'success' };
   },
@@ -429,7 +433,8 @@ export const supabaseServices = {
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
-  hapusRole: async (id: string) => {
+  hapusRole: async (payload: any) => {
+    const id = typeof payload === 'string' ? payload : payload.id;
     await supabase.from('Roles').delete().eq('ID', id);
     return { status: 'success' };
   },
