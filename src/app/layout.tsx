@@ -18,11 +18,32 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SalApp POS",
   description: "Point of Sale for Pondok Pesantren",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "SalApp POS",
+  },
+  openGraph: {
+    title: "SalApp POS",
+    description: "Point of Sale for Pondok Pesantren",
+    url: "https://salapp-pos-tau.vercel.app/",
+    siteName: "SalApp POS",
+    images: [
+      {
+        url: "/logo-512.png",
+        width: 512,
+        height: 512,
+        alt: "SalApp POS Logo",
+      },
+    ],
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "SalApp POS",
+    description: "Point of Sale for Pondok Pesantren",
+    images: ["/logo-512.png"],
   },
 };
 
