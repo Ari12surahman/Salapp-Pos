@@ -75,10 +75,21 @@ export async function PUT(request: Request) {
 
       let authUserId = id;
       if (userEmail) {
+        const prefix = userEmail.split('@')[0].toLowerCase();
         const { data: authList } = await supabaseAdmin.auth.admin.listUsers();
-        const matchedUser = authList?.users.find(u => u.email === userEmail);
+        
+        let matchedUser = authList?.users.find(u => u.email === userEmail);
+        if (!matchedUser) {
+          matchedUser = authList?.users.find(u => u.email?.startsWith(prefix + '@'));
+        }
+
         if (matchedUser) {
           authUserId = matchedUser.id;
+          
+          // Auto-heal: sync email to auth.users so they match exactly
+          if (matchedUser.email !== userEmail) {
+            await supabaseAdmin.auth.admin.updateUserById(authUserId, { email: userEmail, email_confirm: true });
+          }
         }
       }
 
