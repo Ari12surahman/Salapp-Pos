@@ -7,6 +7,7 @@ interface User {
   role: 'Super Admin' | 'Admin Warung' | 'Kasir' | 'Bendahara';
   warungId?: string; // If applicable
   warungName?: string;
+  permissions?: string;
 }
 
 interface AuthState {
