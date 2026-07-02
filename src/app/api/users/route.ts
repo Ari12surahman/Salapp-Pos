@@ -61,7 +61,7 @@ export async function PUT(request: Request) {
       Name: name,
       Role: role,
       WarungID: warungId
-    }).eq('id', id).or(`ID.eq.${id}`); // Just to be safe with casing
+    }).eq('id', id);
 
     if (dbError) {
       return NextResponse.json({ status: 'error', message: dbError.message });
