@@ -12,6 +12,18 @@ const mapKeysToLower = (data: any[]) => {
 };
 
 export const supabaseServices = {
+  getSantri: async () => {
+    const { data, error } = await supabase.from('Data Santri').select('*');
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: mapKeysToLower(data) };
+  },
+
+  getTabungan: async () => {
+    const { data, error } = await supabase.from('Tabungan').select('*');
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: mapKeysToLower(data) };
+  },
+
   getWarung: async () => {
     const { data, error } = await supabase.from('Warung').select('*');
     if (error) return { status: 'error', message: error.message };
@@ -220,35 +232,48 @@ export const supabaseServices = {
   },
   
   login: async (payload: any) => {
-    const email = `${payload.username.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.local`;
+    const cleanUsername = payload.username.trim();
+    const email = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.com`;
     
     // 1. Authenticate with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: email,
       password: payload.password,
     });
     
     if (authError || !authData.user) {
-      console.error("Login Error from Supabase Auth:", authError);
-      return { status: 'error', message: "Username atau Password salah!" };
+      // Fallback for older accounts that were created with .local
+      const oldEmail = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.local`;
+      const { data: fallbackData, error: fallbackError } = await supabase.auth.signInWithPassword({
+        email: oldEmail,
+        password: payload.password,
+      });
+
+      if (fallbackError || !fallbackData.user) {
+        console.error("Login Error from Supabase Auth:", authError, fallbackError);
+        return { status: 'error', message: "Username atau Password salah!" };
+      }
+      authData = fallbackData;
     }
     
     // 2. Fetch User Profile from public.Users
-    const { data, error } = await supabase.from('Users').select('*').eq('id', authData.user.id).single();
+    const { data, error } = await supabase.from('Users').select('*').ilike('Username', cleanUsername);
     
-    if (error || !data) {
-      console.error("Profile Fetch Error:", error);
-      return { status: 'error', message: "Gagal mengambil profil user." };
+    if (error || !data || data.length === 0) {
+      console.error("Profile Fetch Error:", error || "User not found in public.Users");
+      return { status: 'error', message: "Gagal mengambil profil user. Pastikan data user ada di tabel Users." };
     }
+    
+    const userRow = data[0];
     
     // 3. Fetch permissions from Roles
     let permissions = "pos"; // default
-    if (data.Role) {
-      const { data: roleData } = await supabase.from('Roles').select('Permissions').ilike('RoleName', data.Role).single();
-      if (roleData) permissions = roleData.Permissions;
+    if (userRow.Role) {
+      const { data: roleData } = await supabase.from('Roles').select('Permissions').ilike('RoleName', userRow.Role);
+      if (roleData && roleData.length > 0) permissions = roleData[0].Permissions;
     }
     
-    const userObj = mapKeysToLower([data])[0];
+    const userObj = mapKeysToLower([userRow])[0];
     userObj.permissions = permissions;
     // Fix case issue for warungId since Zustand expects camelCase
     userObj.warungId = userObj.warungid;
@@ -259,28 +284,51 @@ export const supabaseServices = {
     };
   },
 
-  // Dicomment sementara agar fallback ke Google Apps Script (Sesuai request urgent)
-  // getPesananOnline: async (payload: any) => {
-  //   let q = supabase.from('Transaksi').select('*').eq('Metode', 'Pesanan Online');
-  //   if (payload?.warungId && payload.warungId !== 'ALL') q = q.eq('WarungID', payload.warungId);
-  //   const { data, error } = await q;
-  //   if (error) return { status: 'error', message: error.message };
-  //   return { status: 'success', data: mapKeysToLower(data) };
-  // },
+  getPesananOnline: async (payload: any) => {
+    let q = supabase.from('Transaksi').select('*').eq('Metode', 'Pesanan Online');
+    if (payload?.warungId && payload.warungId !== 'ALL') q = q.eq('WarungID', payload.warungId);
+    
+    const { data, error } = await q;
+    if (error) return { status: 'error', message: error.message };
+    
+    const orders = mapKeysToLower(data || []);
+    if (orders.length > 0) {
+      const trxIds = orders.map((o: any) => o.trxid);
+      const { data: details } = await supabase.from('DetailTransaksi').select('*').in('TrxID', trxIds);
+      if (details) {
+        const detailsMapped = mapKeysToLower(details);
+        orders.forEach((o: any) => {
+          o.items = detailsMapped
+            .filter((d: any) => d.trxid === o.trxid)
+            .map((d: any) => ({
+              nama: d.namaproduk,
+              qty: d.kuantitas,
+              harga: d.hargasatuan
+            }));
+        });
+      }
+    }
+    
+    return { status: 'success', data: orders };
+  },
 
-  // Dicomment sementara agar fallback ke GAS
-  // updateStatusAmbil: async (payload: any) => {
-  //   const { error } = await supabase.from('Transaksi').update({ StatusAmbil: payload.status }).eq('TrxID', payload.trxId);
-  //   if (error) return { status: 'error', message: error.message };
-  //   return { status: 'success' };
-  // },
+  updateStatusAmbil: async (payload: any) => {
+    if (payload.trxIds && Array.isArray(payload.trxIds)) {
+      const { error } = await supabase.from('Transaksi').update({ StatusAmbil: payload.status }).in('TrxID', payload.trxIds);
+      if (error) return { status: 'error', message: error.message };
+      return { status: 'success' };
+    }
+    const { error } = await supabase.from('Transaksi').update({ StatusAmbil: payload.status }).eq('TrxID', payload.trxId);
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
 
-  // hapusTransaksi: async (payload: any) => {
-  //   if (!payload.trxIds || !payload.trxIds.length) return { status: 'success' };
-  //   const { error } = await supabase.from('Transaksi').delete().in('TrxID', payload.trxIds);
-  //   if (error) return { status: 'error', message: error.message };
-  //   return { status: 'success' };
-  // },
+  hapusTransaksi: async (payload: any) => {
+    if (!payload.trxIds || !payload.trxIds.length) return { status: 'success' };
+    const { error } = await supabase.from('Transaksi').delete().in('TrxID', payload.trxIds);
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
 
   simpanTransaksiOffline: async (payload: any) => {
     const trxId = "TRX-" + new Date().getTime();
@@ -300,10 +348,21 @@ export const supabaseServices = {
       }
     }
 
+    if (payload.method === 'Tabungan') {
+      await supabase.from('Tabungan').insert({
+        id: `TB-${new Date().getTime()}`,
+        tanggal: new Date().toISOString().split('T')[0],
+        nis: payload.santriId,
+        nama: payload.buyerName || 'Santri',
+        jenis: 'Tarik',
+        nominal: payload.total,
+        keterangan: 'Belanja Kantin (POS)'
+      });
+    }
+
     return { status: 'success' };
   },
 
-  /* --- REVERTED TO GAS ---
   getPencairanEligible: async (payload: any) => {
     let q = supabase.from('Transaksi').select('*').eq('StatusPencairan', 'Belum Diajukan').neq('StatusAmbil', 'Batal');
     if (payload?.warungId && payload.warungId !== 'ALL') q = q.eq('WarungID', payload.warungId);
@@ -326,17 +385,29 @@ export const supabaseServices = {
     await supabase.from('Transaksi').update({ StatusPencairan: 'Sedang Diajukan', IDPencairan: idPencairan }).in('TrxID', payload.trxIds);
     return { status: 'success' };
   },
-  */
   simpanPengaturan: async (payload: any) => {
     await supabase.from('Pengaturan').update({ Nilai: payload.domain }).eq('Kunci', 'pakasir_domain');
     await supabase.from('Pengaturan').update({ Nilai: payload.apikey }).eq('Kunci', 'pakasir_apikey');
     return { status: 'success' };
   },
   tambahUser: async (payload: any) => {
-    const newId = "U" + new Date().getTime();
-    await supabase.from('Users').insert({
-      ID: newId, Username: payload.username, Password: payload.password, Name: payload.name, Role: payload.role, WarungID: payload.warungId
-    });
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { status: 'error', message: e.message };
+    }
+  },
+  editUser: async (payload: any) => {
+    const { error } = await supabase.from('Users').update({
+      Username: payload.username, Name: payload.name, Role: payload.role, WarungID: payload.warungId
+    }).eq('id', payload.id);
+    if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
   hapusUser: async (id: string) => {
@@ -345,13 +416,77 @@ export const supabaseServices = {
   },
   tambahRole: async (payload: any) => {
     const newId = "R" + new Date().getTime();
-    await supabase.from('Roles').insert({
-      ID: newId, RoleName: payload.roleName, Permissions: payload.permissions
+    const { error } = await supabase.from('Roles').insert({
+      id: newId, RoleName: payload.roleName, Permissions: payload.permissions
     });
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
+  editRole: async (payload: any) => {
+    const { error } = await supabase.from('Roles').update({
+      RoleName: payload.roleName, Permissions: payload.permissions
+    }).eq('ID', payload.id);
+    if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
   hapusRole: async (id: string) => {
     await supabase.from('Roles').delete().eq('ID', id);
+    return { status: 'success' };
+  },
+  gantiPassword: async (payload: any) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password: payload.newPassword
+    });
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
+  
+  // Kas Warung API
+  getKasWarung: async (payload: any) => {
+    const warungId = payload?.warungId;
+    let q = supabase.from('KasWarung').select('*').order('Tanggal', { ascending: false });
+    if (warungId && warungId !== 'ALL') q = q.eq('WarungID', warungId);
+    const { data, error } = await q;
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: mapKeysToLower(data) };
+  },
+  tambahKasWarung: async (payload: any) => {
+    const { error } = await supabase.from('KasWarung').insert({
+      WarungID: payload.warungId,
+      Tanggal: payload.tanggal,
+      TipeKas: payload.tipeKas,
+      Kategori: payload.kategori,
+      Keterangan: payload.keterangan,
+      Nominal: payload.nominal
+    });
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
+  hapusKasWarung: async (payload: any) => {
+    const { error } = await supabase.from('KasWarung').delete().eq('id', payload.id);
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
+  getKategoriKasWarung: async (payload: any) => {
+    const warungId = payload?.warungId;
+    let q = supabase.from('KategoriKasWarung').select('*');
+    if (warungId && warungId !== 'ALL') q = q.eq('WarungID', warungId);
+    const { data, error } = await q;
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: mapKeysToLower(data) };
+  },
+  tambahKategoriKasWarung: async (payload: any) => {
+    const { error } = await supabase.from('KategoriKasWarung').insert({
+      WarungID: payload.warungId,
+      Tipe: payload.tipe,
+      Nama: payload.nama
+    });
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success' };
+  },
+  hapusKategoriKasWarung: async (payload: any) => {
+    const { error } = await supabase.from('KategoriKasWarung').delete().eq('id', payload.id);
+    if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   }
 };

@@ -59,9 +59,9 @@ export default function ProdukPage() {
 
   const handleEditClick = (item: any) => {
     setFormData({
-      nama: item.nama, kategori: item.kategori, 
-      modal: item.modal, jual: item.jual, 
-      stok: item.stok, barcode: item.barcode || "",
+      nama: item.nama || "", kategori: item.kategori || "", 
+      modal: item.modal || 0, jual: item.jual || 0, 
+      stok: item.stok || 0, barcode: item.barcode || "",
       warungId: item.warungid || item.WarungID || ""
     });
     setEditId(item.id);
@@ -119,7 +119,13 @@ export default function ProdukPage() {
     setIsSubmitting(true);
     try {
       const endpoint = isEdit ? 'editProduk' : 'tambahProduk';
-      const payload = isEdit ? { ...formData, id: editId } : formData;
+      const basePayload = { 
+        ...formData, 
+        hargaModal: Number(formData.modal), 
+        hargaJual: Number(formData.jual),
+        stok: Number(formData.stok)
+      };
+      const payload = isEdit ? { ...basePayload, id: editId } : basePayload;
       const res = await api.post(endpoint, payload);
       if (res && res.status === "error") throw new Error(res.message);
       
@@ -154,7 +160,7 @@ export default function ProdukPage() {
   };
 
   const handleEditKategoriClick = (k: any) => {
-    setKategoriForm({ id: k.id, nama: k.nama, warungId: k.warungid || k.WarungID || k.warungId || "" });
+    setKategoriForm({ id: k.id, nama: k.nama || "", warungId: k.warungid || k.WarungID || k.warungId || "" });
     setIsEditKategori(true);
   };
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, ShoppingCart, Users, Package, Wallet } from "lucide-react";
+import { formatDateID, formatDateTimeID } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/axios";
@@ -21,7 +22,7 @@ export default function Home() {
       const permsArray = savedPerms.split(",");
       if (!permsArray.includes("dashboard")) {
         // Find the first dashboard route they have access to so they don't get trapped in /pos
-        const dashboardRoutes = ["produk", "santri", "warung", "topup", "laporan", "pengaturan"];
+        const dashboardRoutes = ["produk", "santri", "warung", "topup", "laporan", "pengaturan", "cashflow"];
         const firstRoute = dashboardRoutes.find(r => permsArray.includes(r));
         if (firstRoute) {
           router.replace(`/${firstRoute}`);
@@ -33,7 +34,7 @@ export default function Home() {
       }
     } else {
       // Default to allowed if no permissions found (for dev/fallback)
-      setPerms(["dashboard", "pos", "produk", "santri", "warung", "topup", "laporan", "pengaturan"]);
+      setPerms(["dashboard", "pos", "produk", "santri", "warung", "topup", "laporan", "pengaturan", "cashflow"]);
     }
   }, [router]);
 
@@ -89,7 +90,7 @@ export default function Home() {
         </div>
         <div className="font-mono text-xs md:text-sm text-right flex flex-col items-end gap-1">
           <span>STATUS SISTEM: <span className="text-primary font-bold">AKTIF</span></span>
-          <span suppressHydrationWarning>TANGGAL: {new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+          <span suppressHydrationWarning>TANGGAL: {formatDateID(new Date())}</span>
         </div>
       </header>
 
@@ -220,7 +221,7 @@ export default function Home() {
                   <div key={idx} className="flex justify-between items-center p-3 border border-border hover:bg-accent transition-colors">
                     <div>
                       <div className="font-bold font-mono">{trx.trxid}</div>
-                      <div className="text-xs text-muted-foreground uppercase">{new Date(trx.waktu).toLocaleString('id-ID')}</div>
+                      <div className="text-xs text-muted-foreground uppercase">{formatDateTimeID(trx.waktu)}</div>
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-lg">Rp {Number(trx.totalharga).toLocaleString('id-ID')}</div>

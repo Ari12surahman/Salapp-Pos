@@ -6,6 +6,10 @@ import { Download, FileText, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 export default function LaporanPage() {
   const user = useAuthStore(state => state.user);
@@ -14,8 +18,8 @@ export default function LaporanPage() {
   const [deleting, setDeleting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fetchTransaksi = () => {
-    setLoading(true);
+  const fetchTransaksi = (background = false) => {
+    if (!background) setLoading(true);
     api.get('getTransaksi')
       .then(res => {
         if (res?.data) {
@@ -25,21 +29,50 @@ export default function LaporanPage() {
             return !userState?.warungId || userState.warungId === 'ALL' || wId === userState.warungId;
           });
           setData(filtered.reverse());
-          setSelectedIds([]);
         }
       })
       .catch(() => {
-        toast.error("Gagal memuat riwayat transaksi.");
+        if (!background) toast.error("Gagal memuat riwayat transaksi.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!background) setLoading(false);
+      });
   };
 
   useEffect(() => {
     fetchTransaksi();
+    const interval = setInterval(() => {
+      fetchTransaksi(true);
+    }, 10000); // 10s polling for realtime
+    return () => clearInterval(interval);
   }, []);
 
-  const handleExportCSV = () => {
-    const headers = ["ID Transaksi", "Waktu", "ID Santri/Pembeli", "Total Belanja"];
+  const handleExportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Laporan Transaksi");
+
+    // Title Row
+    sheet.mergeCells("A1:D1");
+    const titleCell = sheet.getCell("A1");
+    titleCell.value = `LAPORAN TRANSAKSI - ${user?.warungName || "KANTIN"}`;
+    titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2980B9' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const headers = ["ID Transaksi", "Waktu", "ID Santri/Pembeli", "Total Belanja (Rp)"];
+    sheet.getRow(3).values = headers;
+    sheet.getRow(3).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(3).alignment = { horizontal: 'center' };
+    
+    headers.forEach((_, index) => {
+      const cell = sheet.getCell(3, index + 1);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    sheet.columns = [
+      { width: 25 }, { width: 20 }, { width: 25 }, { width: 20 }
+    ];
     
     const getVal = (item: any, keys: string[]) => {
       for (const k of keys) {
@@ -52,30 +85,82 @@ export default function LaporanPage() {
       return null;
     };
 
-    const rows = data.map((t, idx) => [
-      getVal(t, ['idtransaksi', 'trxid', 'id']) || `TRX-${idx}`,
-      getVal(t, ['waktu', 'tanggal', 'timestamp']) || "-",
-      getVal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST",
-      getVal(t, ['total', 'totalharga', 'harga', 'nominal']) || 0
-    ]);
-    
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(e => e.join(","))
-    ].join("\n");
+    let totalKeseluruhan = 0;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Laporan_Transaksi_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    data.forEach(t => {
+      const nominal = Number(getVal(t, ['total', 'totalharga', 'harga', 'nominal'])) || 0;
+      totalKeseluruhan += nominal;
+
+      const row = sheet.addRow([
+        getVal(t, ['idtransaksi', 'trxid', 'id']) || `TRX`,
+        new Date(getVal(t, ['waktu', 'tanggal', 'timestamp'])).toLocaleString('id-ID'),
+        getVal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST",
+        nominal
+      ]);
+      row.getCell(4).numFmt = '#,##0';
+      row.eachCell(cell => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+    });
+
+    sheet.addRow([]);
+    const summaryRow = sheet.addRow(["", "", "TOTAL SELURUHNYA", totalKeseluruhan]);
+    summaryRow.getCell(3).font = { bold: true };
+    summaryRow.getCell(4).font = { bold: true };
+    summaryRow.getCell(4).numFmt = '#,##0';
+    summaryRow.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAFAF1' } };
+    summaryRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAFAF1' } };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Laporan_Transaksi_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleExportPDF = () => {
-    window.print();
+    const doc = new jsPDF();
+    
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`LAPORAN TRANSAKSI - ${user?.warungName || "KANTIN"}`, 14, 20);
+
+    const getVal = (item: any, keys: string[]) => {
+      for (const k of keys) {
+        for (const itemKey in item) {
+          if (itemKey.replace(/\s+/g, '').toLowerCase() === k.toLowerCase()) return item[itemKey];
+        }
+      }
+      return null;
+    };
+
+    let totalKeseluruhan = 0;
+    const tableColumn = ["ID Transaksi", "Waktu", "Pembeli", "Total Belanja (Rp)"];
+    const tableRows: any[] = data.map((t, idx) => {
+      const nominal = Number(getVal(t, ['total', 'totalharga', 'harga', 'nominal'])) || 0;
+      totalKeseluruhan += nominal;
+      return [
+        getVal(t, ['idtransaksi', 'trxid', 'id']) || `TRX-${idx}`,
+        new Date(getVal(t, ['waktu', 'tanggal', 'timestamp'])).toLocaleString('id-ID'),
+        getVal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST",
+        nominal.toLocaleString('id-ID')
+      ];
+    });
+
+    tableRows.push([{ content: '', colSpan: 4, styles: { fillColor: [255, 255, 255] } }]); 
+    tableRows.push([
+      { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+      { content: 'TOTAL SELURUHNYA', styles: { fontStyle: 'bold', textColor: [39, 174, 96] } },
+      { content: `Rp ${totalKeseluruhan.toLocaleString('id-ID')}`, styles: { fontStyle: 'bold', textColor: [39, 174, 96] } }
+    ]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [41, 128, 185] },
+      styles: { font: "helvetica", fontSize: 9 }
+    });
+
+    doc.save(`Laporan_Transaksi_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleDelete = async (ids: string[]) => {
@@ -98,6 +183,71 @@ export default function LaporanPage() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  // Setor Kas states
+  const getLocalTodayDate = () => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+  };
+
+  const [showSetorModal, setShowSetorModal] = useState(false);
+  const [setorDate, setSetorDate] = useState(getLocalTodayDate());
+  const [isSubmittingKas, setIsSubmittingKas] = useState(false);
+
+  const calculateTotalForDate = (dateString: string) => {
+    let total = 0;
+    const target = new Date(dateString).toDateString();
+    
+    data.forEach(t => {
+      const getVal = (item: any, keys: string[]) => {
+        for (const k of keys) {
+          for (const itemKey in item) {
+            if (itemKey.replace(/\s+/g, '').toLowerCase() === k.toLowerCase()) return item[itemKey];
+          }
+        }
+        return null;
+      };
+      
+      const tDate = new Date(getVal(t, ['waktu', 'tanggal', 'timestamp']));
+      const status = getVal(t, ['statusambil']) || "";
+      if (tDate.toDateString() === target && status !== "Batal") {
+        total += Number(getVal(t, ['total', 'totalharga', 'harga', 'nominal'])) || 0;
+      }
+    });
+    return total;
+  };
+
+  const calculatedSetorTotal = calculateTotalForDate(setorDate);
+
+  const handleSubmitSetor = async () => {
+    if (calculatedSetorTotal <= 0) {
+      toast.error("Tidak ada pemasukan pada tanggal tersebut");
+      return;
+    }
+    
+    setIsSubmittingKas(true);
+    try {
+      const payload = {
+        warungId: user?.warungId || "ALL",
+        tanggal: setorDate,
+        tipeKas: "MASUK",
+        kategori: "Penjualan",
+        keterangan: `Rekap Penjualan Harian - ${setorDate}`,
+        nominal: calculatedSetorTotal
+      };
+      
+      const res = await api.post('tambahKasWarung', payload);
+      if (res.status === "error") throw new Error(res.message);
+      
+      toast.success("Berhasil disetor ke Buku Kas!");
+      setShowSetorModal(false);
+    } catch (err: any) {
+      toast.error("Gagal menyetor ke Buku Kas");
+    } finally {
+      setIsSubmittingKas(false);
+    }
+  };
+
   const toggleSelectAll = () => {
     if (selectedIds.length === data.length) {
       setSelectedIds([]);
@@ -118,7 +268,7 @@ export default function LaporanPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex flex-col gap-6">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex flex-col gap-6 relative">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b-2 border-border pb-4 print:hidden">
         <div>
           <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight">LAPORAN TRANSAKSI</h1>
@@ -133,14 +283,54 @@ export default function LaporanPage() {
               HAPUS ({selectedIds.length})
             </Button>
           )}
-          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
-            <Download className="w-4 h-4" /> CSV
+          <Button variant="default" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowSetorModal(true)}>
+             SETOR KE BUKU KAS
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={handleExportExcel}>
+            <Download className="w-4 h-4" /> EXCEL
           </Button>
           <Button variant="secondary" className="gap-2" onClick={handleExportPDF}>
             <FileText className="w-4 h-4" /> PDF
           </Button>
         </div>
       </header>
+
+      {/* Modal Setor Kas */}
+      {showSetorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 print:hidden">
+          <div className="bg-card border-2 border-border p-6 w-full max-w-sm shadow-2xl">
+            <h2 className="text-xl font-black uppercase mb-2">Setor Ke Buku Kas</h2>
+            <p className="text-sm font-mono text-muted-foreground mb-6">Hitung otomatis total penjualan harian untuk dimasukkan ke Buku Kas.</p>
+            
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex flex-col gap-2">
+                <label className="font-bold text-sm uppercase">Pilih Tanggal</label>
+                <input 
+                  type="date" 
+                  className="border-2 border-border p-2 bg-background font-mono"
+                  value={setorDate}
+                  onChange={(e) => setSetorDate(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2 bg-muted p-4 border-2 border-border text-center">
+                <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Total Penjualan Ditemukan</span>
+                <span className="text-2xl font-black text-emerald-600">Rp {calculatedSetorTotal.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowSetorModal(false)} disabled={isSubmittingKas}>Batal</Button>
+              <Button 
+                onClick={handleSubmitSetor} 
+                disabled={calculatedSetorTotal <= 0 || isSubmittingKas}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {isSubmittingKas ? <Loader2 className="w-4 h-4 animate-spin" /> : "Setor Sekarang"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Print Header - Only visible when printing PDF */}
       <div className="hidden print:block mb-8 text-center border-b-2 border-black pb-4">

@@ -8,6 +8,8 @@ import { ShoppingBag, CheckCircle2, Clock, Check, RefreshCw } from "lucide-react
 import { toast } from "sonner";
 import { useAudio } from "@/hooks/useAudio";
 import { supabase } from "@/lib/supabase";
+import { supabaseServices } from "@/lib/api/supabaseServices";
+import { formatDateTimeID } from "@/lib/utils";
 
 export default function PesananOnlinePage() {
   const user = useAuthStore(state => state.user);
@@ -21,8 +23,8 @@ export default function PesananOnlinePage() {
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['pesananOnline', user?.warungId],
-    queryFn: () => api.post('getPesananOnline', { warungId: user?.warungId || "ALL" }).then(res => res?.data ?? []),
-    refetchInterval: 5000, // Poll every 5 seconds (GAS)
+    queryFn: () => supabaseServices.getPesananOnline({ warungId: user?.warungId || "ALL" }).then(res => res.status === 'success' ? res.data : []),
+    refetchInterval: 5000, // Poll every 5 seconds
     enabled: !!user,
   });
 
@@ -58,8 +60,8 @@ export default function PesananOnlinePage() {
 
   const updateMutation = useMutation({
     mutationFn: (trxIds: string | string[]) => {
-      const payload = Array.isArray(trxIds) ? { trxIds } : { trxId: trxIds };
-      return api.post('updateStatusAmbil', payload);
+      const payload = Array.isArray(trxIds) ? { trxIds, status: "Selesai" } : { trxId: trxIds, status: "Selesai" };
+      return supabaseServices.updateStatusAmbil(payload);
     },
     onSuccess: (res: any) => {
       if(res.status === "success") {
@@ -74,7 +76,7 @@ export default function PesananOnlinePage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (trxIds: string[]) => api.post('hapusTransaksi', { trxIds }),
+    mutationFn: (trxIds: string[]) => supabaseServices.hapusTransaksi({ trxIds }),
     onSuccess: (res: any) => {
       if(res.status === "success") {
          toast.success("Pesanan berhasil dihapus!");
@@ -257,7 +259,7 @@ export default function PesananOnlinePage() {
                </div>
                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-6">
                  <Clock className="w-3.5 h-3.5" />
-                 {new Date(order.waktu).toLocaleString('id-ID')}
+                 {formatDateTimeID(order.waktu)}
                </div>
              </div>
              
@@ -375,7 +377,7 @@ export default function PesananOnlinePage() {
     <div className="hidden print:block p-8 bg-white text-black min-h-screen font-sans">
       <div className="text-center mb-8 border-b-2 border-black pb-4">
         <h1 className="text-2xl font-black uppercase tracking-tight">Rekapitulasi Pesanan Online</h1>
-        <p className="text-sm text-gray-600 mt-1" suppressHydrationWarning>Waktu Cetak: {new Date().toLocaleString('id-ID')}</p>
+        <p className="text-sm text-gray-600 mt-1" suppressHydrationWarning>Waktu Cetak: {formatDateTimeID(new Date())}</p>
       </div>
       
       <div className="flex justify-between mb-8">

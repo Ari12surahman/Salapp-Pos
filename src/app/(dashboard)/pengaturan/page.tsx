@@ -5,21 +5,26 @@ import { toast } from 'sonner';
 import { Settings, User, Store, Bell, Printer, Shield, Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
+import { useAuthStore } from "@/store/authStore";
 
 const MENU_LIST = [
   { id: "dashboard", label: "Dashboard" },
   { id: "pos", label: "Terminal POS" },
   { id: "pesanan-online", label: "Pesanan Online" },
+  { id: "pencairan", label: "Pencairan Dana" },
   { id: "produk", label: "Produk & Stok" },
   { id: "santri", label: "Data Santri" },
   { id: "warung", label: "Kelola Warung" },
   { id: "topup", label: "Top Up Saldo" },
   { id: "laporan", label: "Laporan Harian" },
+  { id: "cashflow", label: "Buku Kas" },
   { id: "pengaturan", label: "Pengaturan" }
 ];
 
 export default function PengaturanPage() {
-  const [activeTab, setActiveTab] = useState("role");
+  const currentUser = useAuthStore((state: any) => state.user);
+  const isAdmin = currentUser?.role === 'Super Admin';
+  const [activeTab, setActiveTab] = useState(isAdmin ? "role" : "user");
 
   const [users, setUsers] = useState<any[]>([]);
   const [warungs, setWarungs] = useState<any[]>([]);
@@ -91,7 +96,10 @@ export default function PengaturanPage() {
 
   const resetForm = () => {
     setFormData({ 
-      username: "", password: "", role: roles[0]?.rolename || "Kasir", name: "", warungId: "Semua",
+      username: "", password: "", 
+      role: isAdmin ? (roles[0]?.rolename || "Kasir") : "Kasir", 
+      name: "", 
+      warungId: isAdmin ? "Semua" : (currentUser?.warungId || "Semua"),
       roleName: "", permissions: [] 
     });
     setIsEdit(false);
@@ -209,47 +217,51 @@ export default function PengaturanPage() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex flex-col gap-6">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b-2 border-border pb-4">
         <div>
-          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight">PENGATURAN</h1>
+          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight">
+            {isAdmin ? "PENGATURAN" : "PENGGUNA"}
+          </h1>
           <p className="font-mono text-sm text-muted-foreground uppercase tracking-widest mt-1">
-            SYSTEM CONFIGURATION
+            {isAdmin ? "SYSTEM CONFIGURATION" : "MANAJEMEN PENGGUNA"}
           </p>
         </div>
       </header>
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar Nav */}
-        <div className="w-full md:w-64 flex flex-col gap-2 shrink-0">
-          <button 
-            onClick={() => setActiveTab("role")}
-            className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "role" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
-          >
-            <Shield className="w-4 h-4" /> Hak Akses
-          </button>
-          <button 
-            onClick={() => setActiveTab("user")}
-            className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "user" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
-          >
-            <User className="w-4 h-4" /> Pengguna
-          </button>
-          <button 
-            onClick={() => setActiveTab("umum")}
-            className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "umum" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
-          >
-            <Settings className="w-4 h-4" /> Umum
-          </button>
-          <button 
-            onClick={() => setActiveTab("warung")}
-            className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "warung" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
-          >
-            <Store className="w-4 h-4" /> Profil Warung
-          </button>
-          <button 
-            onClick={() => setActiveTab("printer")}
-            className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "printer" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
-          >
-            <Printer className="w-4 h-4" /> Struk & Printer
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="w-full md:w-64 flex flex-col gap-2 shrink-0">
+            <button 
+              onClick={() => setActiveTab("role")}
+              className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "role" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
+            >
+              <Shield className="w-4 h-4" /> Hak Akses
+            </button>
+            <button 
+              onClick={() => setActiveTab("user")}
+              className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "user" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
+            >
+              <User className="w-4 h-4" /> Pengguna
+            </button>
+            <button 
+              onClick={() => setActiveTab("umum")}
+              className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "umum" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
+            >
+              <Settings className="w-4 h-4" /> Umum
+            </button>
+            <button 
+              onClick={() => setActiveTab("warung")}
+              className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "warung" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
+            >
+              <Store className="w-4 h-4" /> Profil Warung
+            </button>
+            <button 
+              onClick={() => setActiveTab("printer")}
+              className={`flex items-center gap-3 px-4 py-3 font-bold uppercase transition-colors border-2 ${activeTab === "printer" ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:border-foreground"}`}
+            >
+              <Printer className="w-4 h-4" /> Struk & Printer
+            </button>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 bg-card border-2 border-border p-6 min-h-[400px]">
@@ -341,7 +353,7 @@ export default function PengaturanPage() {
                         <tr>
                           <td colSpan={5} className="py-8 text-center text-muted-foreground italic">Belum ada pengguna</td>
                         </tr>
-                      ) : users.map((u, i) => {
+                      ) : users.filter(u => isAdmin ? true : getVal(u, ['warungid', 'warung']) === currentUser?.warungId).map((u, i) => {
                         const id = getVal(u, ['id', 'iduser']) || `U-${i}`;
                         const nama = getVal(u, ['name', 'nama']);
                         const username = getVal(u, ['username']);
@@ -360,7 +372,7 @@ export default function PengaturanPage() {
                             <td className="py-3 px-2 text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Button onClick={() => handleEditClick("user", u)} variant="outline" size="icon" className="h-8 w-8"><Edit className="w-3 h-3" /></Button>
-                                <Button onClick={() => handleDeleteClick("user", id)} variant="destructive" size="icon" className="h-8 w-8"><Trash2 className="w-3 h-3" /></Button>
+                                {role !== 'Super Admin' && <Button onClick={() => handleDeleteClick("user", id)} variant="destructive" size="icon" className="h-8 w-8"><Trash2 className="w-3 h-3" /></Button>}
                               </div>
                             </td>
                           </tr>
@@ -456,7 +468,7 @@ export default function PengaturanPage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="font-bold text-sm uppercase">Role / Jabatan</label>
-                  <select name="role" value={formData.role} onChange={handleInputChange} className="border-2 border-border p-2 bg-background font-mono uppercase">
+                  <select name="role" value={formData.role} onChange={handleInputChange} disabled={!isAdmin} className="border-2 border-border p-2 bg-background font-mono uppercase disabled:opacity-50">
                     {roles.map((r, idx) => {
                       const rName = getVal(r, ['rolename', 'nama']) || `Role-${idx}`;
                       return <option key={idx} value={rName}>{rName}</option>
@@ -466,7 +478,7 @@ export default function PengaturanPage() {
 
                 <div className="flex flex-col gap-2">
                   <label className="font-bold text-sm uppercase">Tugaskan ke Warung</label>
-                  <select name="warungId" value={formData.warungId} onChange={handleInputChange} className="border-2 border-border p-2 bg-background font-mono uppercase">
+                  <select name="warungId" value={formData.warungId} onChange={handleInputChange} disabled={!isAdmin} className="border-2 border-border p-2 bg-background font-mono uppercase disabled:opacity-50">
                     <option value="Semua">Semua / Tidak Spesifik</option>
                     {warungs.map((w, idx) => {
                       const wId = getVal(w, ['id', 'idwarung']) || `WR-${idx}`;

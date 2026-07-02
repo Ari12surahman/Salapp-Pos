@@ -24,6 +24,7 @@ export default function PencairanPage() {
     queryKey: ['riwayatPencairan', user?.warungId],
     queryFn: () => api.post('getRiwayatPencairan', { warungId: user?.warungId || "ALL" }).then(res => res?.data ?? []),
     enabled: !!user,
+    refetchInterval: 10000,
   });
 
   const ajukanMutation = useMutation({
@@ -45,8 +46,8 @@ export default function PencairanPage() {
   const eligibleList = Array.isArray(eligibleData) ? eligibleData : [];
   const riwayatList = Array.isArray(riwayatData) ? riwayatData : [];
 
-  const totalDanaEligible = eligibleList.reduce((sum: number, item: any) => sum + (Number(item.total) || 0), 0);
-  const trxIds = eligibleList.map((item: any) => item.trxId);
+  const totalDanaEligible = eligibleList.reduce((sum: number, item: any) => sum + (Number(item.totalharga || item.TotalHarga) || 0), 0);
+  const trxIds = eligibleList.map((item: any) => item.trxid || item.TrxID).filter(Boolean);
 
   const handleAjukan = () => {
     if (trxIds.length === 0) return;
@@ -76,7 +77,7 @@ export default function PencairanPage() {
             Rp {totalDanaEligible.toLocaleString('id-ID')}
           </h2>
           <p className="text-sm font-mono text-muted-foreground mb-6">
-            Dari {eligibleList.length} transaksi non-tunai terbaru.
+            Dari {trxIds.length} transaksi non-tunai terbaru.
           </p>
 
           <div className="bg-blue-50 text-blue-800 border border-blue-200 rounded-lg p-4 mb-6 flex gap-3 text-left w-full max-w-sm">
@@ -110,28 +111,35 @@ export default function PencairanPage() {
                 Belum ada riwayat pencairan.
               </div>
             ) : (
-              riwayatList.map((item: any, idx: number) => (
+              riwayatList.map((item: any, idx: number) => {
+                const totaldana = item.totaldana || item.TotalDana;
+                const status = item.status || item.Status;
+                const idpencairan = item.idpencairan || item.IDPencairan;
+                const waktupengajuan = item.waktupengajuan || item.WaktuPengajuan;
+                const waktuselesai = item.waktuselesai || item.WaktuSelesai;
+                
+                return (
                 <div key={idx} className="flex justify-between items-center p-4 border rounded-xl hover:bg-muted/50 transition-colors">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-lg">Rp {Number(item.TotalDana || 0).toLocaleString('id-ID')}</span>
-                      <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${item.Status === 'Selesai' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {item.Status === 'Selesai' ? <CheckCircle2 className="w-3 h-3 inline mr-1" /> : <Clock className="w-3 h-3 inline mr-1" />}
-                        {item.Status}
+                      <span className="font-bold text-lg">Rp {Number(totaldana || 0).toLocaleString('id-ID')}</span>
+                      <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${status === 'Selesai' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {status === 'Selesai' ? <CheckCircle2 className="w-3 h-3 inline mr-1" /> : <Clock className="w-3 h-3 inline mr-1" />}
+                        {status}
                       </span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">
-                      ID: {item.IDPencairan} • {new Date(item.WaktuPengajuan).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}
+                      ID: {idpencairan} • {new Date(waktupengajuan).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}
                     </div>
                   </div>
-                  {item.Status === 'Selesai' && item.WaktuSelesai && (
+                  {status === 'Selesai' && waktuselesai && (
                     <div className="text-right text-xs">
                       <div className="text-muted-foreground">Diselesaikan:</div>
-                      <div className="font-bold">{new Date(item.WaktuSelesai).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</div>
+                      <div className="font-bold">{new Date(waktuselesai).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</div>
                     </div>
                   )}
                 </div>
-              ))
+              )})
             )}
           </div>
         </div>

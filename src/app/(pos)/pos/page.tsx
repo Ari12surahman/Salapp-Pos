@@ -7,6 +7,8 @@ import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatDateID, formatDateTimeID } from "@/lib/utils";
+import { formatRupiah } from "@/lib/format";
 import { api } from "@/lib/api/axios";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuthStore } from "@/store/authStore";
@@ -326,13 +328,13 @@ export default function PosPage() {
         if (res.status === "error" || (res.data && res.data.status === "error")) {
           throw new Error((res.data && res.data.message) || res.message || "Gagal menyimpan transaksi");
         }
-        setLastTransaction({ ...payload, trxId: res.data?.trxId, waktu: new Date().toLocaleString('id-ID'), method });
+        setLastTransaction({ ...payload, trxId: res.data?.trxId, waktu: formatDateTimeID(new Date()), method });
       } catch (err: any) {
         if (!navigator.onLine || err.message === "Network Error" || err.message === "Failed to fetch" || err.message?.includes("fetch")) {
           toast.warning("Koneksi terputus. Disimpan ke antrean offline.");
           addPending(payload);
           isOffline = true;
-          setLastTransaction({ ...payload, trxId: "OFFLINE-" + Date.now(), waktu: new Date().toLocaleString('id-ID'), method });
+          setLastTransaction({ ...payload, trxId: "OFFLINE-" + Date.now(), waktu: formatDateTimeID(new Date()), method });
         } else {
           throw err;
         }
@@ -365,10 +367,12 @@ export default function PosPage() {
         const savedDomain = localStorage.getItem("PAKASIR_DOMAIN") || "depodomain";
         const savedApiKey = localStorage.getItem("PAKASIR_APIKEY") || "xxx123";
 
-        const proxyUrl = "https://script.google.com/macros/s/AKfycbySCGbNxmkRdsyI2RSbszpwC8mxwhfbQulQsiG_DfUU1tdje_BCn9Tz9tdk_ERFLLOA/exec";
-        const url = `${proxyUrl}?action=pollPakasirStatus&data=${encodeURIComponent(JSON.stringify({ slug: savedDomain, amount, orderId, apiKey: savedApiKey }))}`;
-        
-        const res = await fetch(url).then(r => r.json());
+        const payload = { slug: savedDomain, amount, orderId, apiKey: savedApiKey };
+        const res = await fetch('/api/pakasir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'pollPakasirStatus', data: payload })
+        }).then(r => r.json());
         
         const statusStr = (res?.transaction?.status || res?.payment?.status || res?.status || '').toLowerCase();
         if (['completed', 'success', 'settlement', 'paid', 'lunas'].includes(statusStr) || res?.data?.status === 'Lunas') {
@@ -395,10 +399,13 @@ export default function PosPage() {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
 
-      const proxyUrl = "https://script.google.com/macros/s/AKfycbySCGbNxmkRdsyI2RSbszpwC8mxwhfbQulQsiG_DfUU1tdje_BCn9Tz9tdk_ERFLLOA/exec";
-      const url = `${proxyUrl}?action=requestPakasirPayment&data=${encodeURIComponent(JSON.stringify({ slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey }))}`;
+      const payload = { slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey };
       
-      const response = await fetch(url).then(r => r.json());
+      const response = await fetch('/api/pakasir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'requestPakasirPayment', data: payload })
+      }).then(r => r.json());
       const res = typeof response === 'string' ? JSON.parse(response) : response;
 
       if (res?.status === 'success' || res?.checkout_url || (res?.data && res?.data?.status === 'success') || res?.payment) {
@@ -488,7 +495,7 @@ export default function PosPage() {
         });
 
         setClosingData({
-          date: new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+          date: formatDateID(new Date()),
           count,
           totalTunai,
           totalQris,
@@ -1444,7 +1451,7 @@ export default function PosPage() {
           <div className="text-center text-[10px] mt-4">
             <p>================================</p>
             <p className="font-bold">Kasir: {user?.name || "System"}</p>
-            <p>{new Date().toLocaleString('id-ID')}</p>
+            <p>{formatDateTimeID(new Date())}</p>
             <p className="mt-4">- SALAPP POS -</p>
           </div>
         </div>
