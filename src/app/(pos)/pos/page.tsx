@@ -16,12 +16,28 @@ import { useRouter } from "next/navigation";
 import { CameraScanner } from "@/components/ui/CameraScanner";
 import { useAudio } from "@/hooks/useAudio";
 import { useSyncStore } from "@/store/useSyncStore";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from "@/lib/supabase";
 
 export default function PosPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart: originalClearCart, getCartTotal } = usePosStore();
   const user = useAuthStore(state => state.user);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-produk-pos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Produk' }, (payload) => {
+        // Invalidate cache immediately when Produk changes
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
   
   const [buyerId, setBuyerId] = useState("");
   const [buyerData, setBuyerData] = useState<{nama: string, saldo: number} | null>(null);
