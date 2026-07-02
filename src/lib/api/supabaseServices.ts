@@ -424,8 +424,13 @@ export const supabaseServices = {
   },
   hapusUser: async (payload: any) => {
     const id = typeof payload === 'string' ? payload : payload.id;
-    await supabase.from('Users').delete().eq('ID', id);
-    return { status: 'success' };
+    try {
+      const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { status: 'error', message: e.message };
+    }
   },
   tambahRole: async (payload: any) => {
     const newId = "R" + new Date().getTime();

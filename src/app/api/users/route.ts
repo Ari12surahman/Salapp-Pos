@@ -107,3 +107,44 @@ export async function PUT(request: Request) {
     return NextResponse.json({ status: 'error', message: error.message });
   }
 }
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ status: 'error', message: 'ID is required' });
+    }
+
+    // Optional: Get true Auth ID if mismatched (though typically delete by email or assume ID matches)
+    const { data: userData } = await supabaseAdmin.from('Users').select('Email').eq('id', id).single();
+    const userEmail = userData?.Email;
+
+    let authUserId = id;
+    if (userEmail) {
+      const prefix = userEmail.split('@')[0].toLowerCase();
+      const { data: authList } = await supabaseAdmin.auth.admin.listUsers();
+      
+      let matchedUser = authList?.users.find(u => u.email === userEmail);
+      if (!matchedUser) {
+        matchedUser = authList?.users.find(u => u.email?.startsWith(prefix + '@'));
+      }
+      if (matchedUser) authUserId = matchedUser.id;
+    }
+
+    // 1. Delete from Auth Users
+    await supabaseAdmin.auth.admin.deleteUser(authUserId);
+
+    // 2. Delete from public.Users
+    const { error: dbError } = await supabaseAdmin.from('Users').delete().eq('id', id);
+
+    if (dbError) {
+      return NextResponse.json({ status: 'error', message: dbError.message });
+    }
+
+    return NextResponse.json({ status: 'success' });
+  } catch (error: any) {
+    return NextResponse.json({ status: 'error', message: error.message });
+  }
+}
+
