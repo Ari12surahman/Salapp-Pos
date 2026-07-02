@@ -94,7 +94,7 @@ export default function LoginPage() {
   if (isAuthenticated) return null;
 
   return (
-    <div className="w-full max-w-sm flex flex-col gap-4">
+    <div className="w-full max-w-sm flex flex-col gap-4 px-4">
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="text-3xl flex items-center justify-between">

@@ -202,22 +202,24 @@ export default function ProdukPage() {
             INVENTORY & CATALOG CONTROL
           </p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder="Cari Nama / Barcode..." 
-              className="pl-9 font-mono uppercase"
+              className="pl-9 font-mono uppercase w-full"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => { resetKategoriForm(); setIsKategoriModalOpen(true); }}>
-            <Filter className="w-4 h-4" /> KELOLA KATEGORI
-          </Button>
-          <Button className="gap-2" onClick={handleAddClick}>
-            <Plus className="w-4 h-4" /> BARU
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="flex-1 sm:flex-none gap-2" onClick={() => { resetKategoriForm(); setIsKategoriModalOpen(true); }}>
+              <Filter className="w-4 h-4" /> KATEGORI
+            </Button>
+            <Button className="flex-1 sm:flex-none gap-2" onClick={handleAddClick}>
+              <Plus className="w-4 h-4" /> BARU
+            </Button>
+          </div>
         </div>
       </header>
 
