@@ -69,9 +69,23 @@ export async function PUT(request: Request) {
 
     // 2. If a new password is provided, update it in Supabase Auth
     if (password && password.trim() !== '') {
-      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+      // Find real auth user id by email
+      const { data: userData } = await supabaseAdmin.from('Users').select('Email').eq('id', id).single();
+      const userEmail = userData?.Email;
+
+      let authUserId = id;
+      if (userEmail) {
+        const { data: authList } = await supabaseAdmin.auth.admin.listUsers();
+        const matchedUser = authList?.users.find(u => u.email === userEmail);
+        if (matchedUser) {
+          authUserId = matchedUser.id;
+        }
+      }
+
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
         password: password
       });
+      
       if (authError) {
         return NextResponse.json({ status: 'error', message: "Profil tersimpan tapi gagal ganti password: " + authError.message });
       }
