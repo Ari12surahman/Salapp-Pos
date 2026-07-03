@@ -16,17 +16,20 @@ export async function POST(request: Request) {
     const payload = typeof data === 'string' ? JSON.parse(data) : data;
 
     if (action === 'requestPakasirPayment') {
-      const url = `https://${payload.slug}.pakasir.com/api/transaction/create`;
+      const method = payload.method === 'qris' ? 'qris' : 'va'; // Pakasir supports specific endpoints like /qris, /bni_va
+      // Correct API Endpoint per pakasir-client docs:
+      const url = `https://app.pakasir.com/api/transactioncreate/${method}`;
+      
       const res = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': payload.apiKey
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          amount: payload.amount,
+          project: payload.slug,
           order_id: payload.orderId,
-          method: payload.method === 'qris' ? 'qris' : 'va'
+          amount: payload.amount,
+          api_key: payload.apiKey
         })
       });
 
@@ -41,12 +44,17 @@ export async function POST(request: Request) {
       return NextResponse.json(responseData, { headers: corsHeaders });
     } 
     else if (action === 'pollPakasirStatus') {
-      const url = `https://${payload.slug}.pakasir.com/api/transaction/status/${payload.orderId}`;
+      // Endpoint is transactiondetail (GET)
+      const params = new URLSearchParams({
+         project: payload.slug,
+         order_id: payload.orderId,
+         amount: String(payload.amount),
+         api_key: payload.apiKey
+      });
+      const url = `https://app.pakasir.com/api/transactiondetail?${params.toString()}`;
+      
       const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': payload.apiKey
-        }
+        method: 'GET'
       });
       const responseText = await res.text();
       let responseData;
