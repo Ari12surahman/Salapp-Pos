@@ -431,8 +431,6 @@ export default function PosPage() {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
 
-      const isSandboxMode = savedDomain.toLowerCase() === 'sunbox' || savedDomain.toLowerCase().includes('sandbox') || savedDomain.toLowerCase().includes('demo');
-      
       const payload = { slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey };
       
       const response = await fetch('/api/pakasir', {
@@ -445,15 +443,19 @@ export default function PosPage() {
       if (res?.status === 'success' || res?.checkout_url || (res?.data && res?.data?.status === 'success') || res?.payment) {
         const paymentData = res?.payment || res?.data || res;
         const checkoutUrl = paymentData.checkout_url || paymentData.url;
+        const qrString = paymentData.payment_number || paymentData.qr_string || null;
+        
+        // Detect sandbox mode from the QR string response or VA dummy number
+        const isSandboxServer = qrString && (qrString.toUpperCase().includes('SANDBOX') || qrString === '123123123');
         
         setPakasirData({
           step: 'SHOW_QR',
-          qrString: paymentData.payment_number || paymentData.qr_string || null,
+          qrString,
           url: paymentData.url || checkoutUrl,
           loading: false,
           isPaid: false,
           checkoutUrl,
-          isSandbox: isSandboxMode
+          isSandbox: isSandboxServer
         });
         pollPakasirStatus(orderId, amount);
       } else {
