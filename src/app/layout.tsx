@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import Providers from "./providers";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import AutoUpdater from "@/components/AutoUpdater";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,6 +74,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <Providers>
+          <AutoUpdater />
           {children}
           <Toaster 
             position="top-center" 
