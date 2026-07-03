@@ -110,7 +110,23 @@ export default function PosPage() {
   // Pakasir State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [pakasirData, setPakasirData] = useState<{ step: string, qrString: string | null, loading: boolean, url: string, isPaid: boolean, checkoutUrl: string }>({ step: 'CHOOSE_METHOD', qrString: null, loading: false, url: '', isPaid: false, checkoutUrl: '' });
+  const [pakasirData, setPakasirData] = useState<{ 
+    step: string, 
+    qrString: string | null, 
+    loading: boolean, 
+    url: string, 
+    isPaid: boolean, 
+    checkoutUrl: string,
+    isSandbox?: boolean
+  }>({ 
+    step: 'CHOOSE_METHOD', 
+    qrString: null, 
+    loading: false, 
+    url: '', 
+    isPaid: false, 
+    checkoutUrl: '',
+    isSandbox: false
+  });
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Closing State
@@ -415,6 +431,8 @@ export default function PosPage() {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
 
+      const isSandboxMode = savedDomain.toLowerCase() === 'sunbox' || savedDomain.toLowerCase().includes('sandbox') || savedDomain.toLowerCase().includes('demo');
+      
       const payload = { slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey };
       
       const response = await fetch('/api/pakasir', {
@@ -434,7 +452,8 @@ export default function PosPage() {
           url: paymentData.url || checkoutUrl,
           loading: false,
           isPaid: false,
-          checkoutUrl
+          checkoutUrl,
+          isSandbox: isSandboxMode
         });
         pollPakasirStatus(orderId, amount);
       } else {
@@ -445,7 +464,8 @@ export default function PosPage() {
           url: 'https://sandbox.pakasir.com/simulate',
           loading: false,
           isPaid: false,
-          checkoutUrl: 'https://sandbox.pakasir.com/simulate'
+          checkoutUrl: 'https://sandbox.pakasir.com/simulate',
+          isSandbox: true
         });
       }
     } catch (err: any) {
@@ -1089,7 +1109,7 @@ export default function PosPage() {
                   {pakasirData.qrString ? (
                     <div className="p-4 bg-white rounded-lg border-4 border-border relative">
                       <QRCodeSVG value={pakasirData.qrString} size={200} />
-                      {pakasirData.qrString.toUpperCase().includes('SANDBOX') && (
+                      {pakasirData.isSandbox && (
                         <div className="absolute inset-0 flex items-center justify-center bg-white/80 font-bold text-red-600 text-xl rotate-[-20deg] border-4 border-red-600">
                           SANDBOX MODE
                         </div>
@@ -1106,7 +1126,7 @@ export default function PosPage() {
                   </p>
 
                   {/* TOMBOL SIMULASI SANDBOX */}
-                  {(pakasirData.qrString?.toUpperCase().includes('SANDBOX') || pakasirData.url?.toUpperCase().includes('SANDBOX')) && (
+                  {pakasirData.isSandbox && (
                     <Button 
                       variant="destructive" 
                       className="mt-2 w-full animate-pulse border-2 border-red-800"
