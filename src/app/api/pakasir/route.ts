@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const payload = typeof data === 'string' ? JSON.parse(data) : data;
 
     if (action === 'requestPakasirPayment') {
-      const method = payload.method === 'qris' ? 'qris' : 'va'; // Pakasir supports specific endpoints like /qris, /bni_va
+      const method = payload.method || 'qris'; // Pakasir supports specific endpoints like /qris, /bni_va
       // Correct API Endpoint per pakasir-client docs:
       const url = `https://app.pakasir.com/api/transactioncreate/${method}`;
       
