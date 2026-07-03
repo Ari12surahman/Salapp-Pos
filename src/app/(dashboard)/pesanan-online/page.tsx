@@ -293,7 +293,7 @@ export default function PesananOnlinePage() {
 
                 <div className="flex justify-between items-center pt-3 border-t font-bold mt-auto">
                   <span>Total</span>
-                  <span className="text-primary text-lg">Rp {Number(order.totalharga || 0).toLocaleString('id-ID')}</span>
+                  <span className="text-primary text-lg">Rp {Number(order.totalharga || order.TotalHarga || 0).toLocaleString('id-ID')}</span>
                 </div>
               </div>
 
