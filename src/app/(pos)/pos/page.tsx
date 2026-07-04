@@ -430,6 +430,23 @@ export default function PosPage() {
       // Unique Order ID
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
+      
+      const dbPayload = {
+        orderId,
+        santriId: buyerId || pendingBuyer?.nis || null,
+        buyerName: buyerData?.nama || pendingBuyer?.nama || "Guest",
+        total: amount,
+        method: type,
+        warungId: (user?.warungId === 'ALL' && cart.length > 0) ? (cart[0].warungId || 'ALL') : (user?.warungId || "UNKNOWN"),
+        items: cart.map((c: any) => ({ id: c.id, name: c.name, price: c.price, quantity: c.quantity }))
+      };
+
+      await supabase.from('PakasirOrders').insert([{
+        order_id: orderId,
+        tipe: 'POS',
+        status: 'PENDING',
+        payload: dbPayload
+      }]);
 
       const payload = { slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey };
       
