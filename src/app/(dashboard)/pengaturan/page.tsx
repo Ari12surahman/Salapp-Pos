@@ -63,8 +63,8 @@ export default function PengaturanPage() {
       if (resRoles?.data) setRoles(resRoles.data);
       if (resPengaturan?.data) {
         const pData = resPengaturan.data;
-        const dom = pData.find((p: any) => p.kunci === "PAKASIR_DOMAIN")?.nilai;
-        const apiK = pData.find((p: any) => p.kunci === "PAKASIR_APIKEY")?.nilai;
+        const dom = pData.find((p: any) => p.kunci === "PAKASIR_DOMAIN" || p.kunci === "pakasir_domain")?.nilai;
+        const apiK = pData.find((p: any) => p.kunci === "PAKASIR_APIKEY" || p.kunci === "pakasir_apikey")?.nilai;
         if (dom) { setPakasirDomain(dom); localStorage.setItem("PAKASIR_DOMAIN", dom); }
         if (apiK) { setPakasirApiKey(apiK); localStorage.setItem("PAKASIR_APIKEY", apiK); }
       }
