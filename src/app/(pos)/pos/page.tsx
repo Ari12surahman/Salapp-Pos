@@ -1026,7 +1026,7 @@ export default function PosPage() {
                         <CreditCard className={`w-5 h-5 ${bank.color}`} />
                         <span>{bank.name}</span>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-400" />
+                      <ArrowUpRight className="w-4 h-4 text-slate-400" />
                     </Button>
                   ))}
                 </div>
