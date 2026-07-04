@@ -420,7 +420,7 @@ export default function PosPage() {
     }, 5000);
   };
 
-  const generatePakasir = async (type: 'qris' | 'va') => {
+  const generatePakasir = async (type: string) => {
     setPakasirData(prev => ({ ...prev, loading: true }));
     try {
       // Retrieve credentials from localStorage
@@ -449,7 +449,7 @@ export default function PosPage() {
         const isSandboxServer = qrString && (qrString.toUpperCase().includes('SANDBOX') || qrString === '123123123');
         
         setPakasirData({
-          step: 'SHOW_QR',
+          step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
           qrString,
           url: paymentData.url || checkoutUrl,
           loading: false,
@@ -461,8 +461,8 @@ export default function PosPage() {
       } else {
         toast.warning("API Pakasir belum disetting (Mode Sandbox Aktif)");
         setPakasirData({
-          step: 'SHOW_QR',
-          qrString: 'SANDBOX-QR-' + Date.now(),
+          step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
+          qrString: type === 'qris' ? 'SANDBOX-QR-' + Date.now() : '1234567890 (SANDBOX)',
           url: 'https://sandbox.pakasir.com/simulate',
           loading: false,
           isPaid: false,
@@ -988,13 +988,48 @@ export default function PosPage() {
                   </Button>
                   <Button 
                     className="h-16 text-lg font-bold flex justify-between px-6 bg-orange-600 hover:bg-orange-700 text-white border-orange-800" 
-                    onClick={() => { setPaymentMethod('VA'); generatePakasir('va'); }}
+                    onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
                     disabled={pakasirData.loading}
                   >
-                    <span>{pakasirData.loading && paymentMethod === 'VA' ? "MEMPROSES..." : "VIRTUAL ACCOUNT"}</span>
+                    <span>VIRTUAL ACCOUNT</span>
                     <CreditCard className="w-6 h-6" />
                   </Button>
                 </>
+              )}
+
+              {pakasirData.step === 'CHOOSE_VA' && (
+                <div className="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2">
+                  <div className="flex items-center justify-between mb-2 border-b border-border pb-2">
+                    <h3 className="font-bold text-lg">Pilih Bank VA</h3>
+                    <Button variant="ghost" size="sm" onClick={() => setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' })}>Kembali</Button>
+                  </div>
+                  
+                  {[
+                    { id: 'bni_va', name: 'BNI VA', color: 'text-orange-600' },
+                    { id: 'bri_va', name: 'BRI VA', color: 'text-blue-700' },
+                    { id: 'cimb_niaga_va', name: 'CIMB Niaga VA', color: 'text-red-600' },
+                    { id: 'permata_va', name: 'Permata VA', color: 'text-emerald-600' },
+                    { id: 'sampoerna_va', name: 'Sahabat Sampoerna VA', color: 'text-red-500' },
+                    { id: 'bnc_va', name: 'BNC VA', color: 'text-yellow-500' },
+                    { id: 'maybank_va', name: 'Maybank VA', color: 'text-yellow-600' },
+                    { id: 'atm_bersama_va', name: 'ATM Bersama VA', color: 'text-blue-500' },
+                    { id: 'artha_graha_va', name: 'Artha Graha VA', color: 'text-blue-800' }
+                  ].map((bank) => (
+                    <Button 
+                      key={bank.id}
+                      variant="outline" 
+                      className="h-14 text-md font-bold flex justify-between px-4 border-2 hover:bg-slate-50"
+                      onClick={() => generatePakasir(bank.id)}
+                      disabled={pakasirData.loading}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CreditCard className={`w-5 h-5 ${bank.color}`} />
+                        <span>{bank.name}</span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400" />
+                    </Button>
+                  ))}
+                </div>
               )}
 
               {pakasirData.step === 'SCAN_TABUNGAN' && (
@@ -1145,12 +1180,68 @@ export default function PosPage() {
 
                   <Button 
                     variant="outline" 
-                    className="mt-4 w-full"
-                    onClick={() => {
-                      if (pollingRef.current) clearInterval(pollingRef.current);
-                      setPakasirData({ step: 'CHOOSE_METHOD', qrString: null, loading: false, url: '', isPaid: false, checkoutUrl: '' });
-                    }}
-                  >
+                      onClick={() => simulateSandboxSuccess(pakasirData.qrString || '')}
+                      className="w-full bg-red-500 hover:bg-red-600 font-bold tracking-widest mt-4"
+                    >
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      SIMULASI LUNAS (SANDBOX)
+                    </Button>
+                  )}
+
+                  <Button variant="outline" className="w-full font-bold uppercase tracking-widest mt-2" onClick={() => { if(pollingRef.current) clearInterval(pollingRef.current); setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' }); }}>
+                    BATAL / KEMBALI
+                  </Button>
+                </div>
+              )}
+
+              {pakasirData.step === 'SHOW_VA' && (
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <p className="font-bold uppercase tracking-widest">{paymentMethod} GENERATED</p>
+                  
+                  {pakasirData.qrString && (
+                    <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
+                      <p className="text-xs font-semibold text-steel uppercase mb-1">Nomor Virtual Account</p>
+                      <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
+                    </div>
+                  )}
+
+                  <div className="flex w-full gap-2 mt-2">
+                    <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
+                        navigator.clipboard.writeText(pakasirData.qrString || '');
+                        toast.success("Nomor VA disalin");
+                    }}>
+                      <Copy className="w-4 h-4 mr-2" /> Salin VA
+                    </Button>
+                    <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
+                        navigator.clipboard.writeText(getCartTotal().toString());
+                        toast.success("Nominal disalin");
+                    }}>
+                      <Copy className="w-4 h-4 mr-2" /> Salin Nominal
+                    </Button>
+                  </div>
+                  
+                  {pakasirData.url && (
+                    <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
+                      Buka Halaman Pembayaran
+                    </a>
+                  )}
+                  
+                  <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2 mt-4">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
+                  </p>
+
+                  {/* TOMBOL SIMULASI SANDBOX */}
+                  {pakasirData.isSandbox && (
+                    <Button 
+                      onClick={() => simulateSandboxSuccess(pakasirData.qrString || '')}
+                      className="w-full bg-red-500 hover:bg-red-600 text-white font-bold tracking-widest mt-2"
+                    >
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      SIMULASI LUNAS (SANDBOX)
+                    </Button>
+                  )}
+
+                  <Button variant="outline" className="w-full font-bold uppercase tracking-widest mt-2" onClick={() => { if(pollingRef.current) clearInterval(pollingRef.current); setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' }); }}>
                     BATAL / KEMBALI
                   </Button>
                 </div>
