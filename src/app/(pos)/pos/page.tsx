@@ -1178,15 +1178,7 @@ export default function PosPage() {
                     </Button>
                   )}
 
-                  <Button 
-                    variant="outline" 
-                      onClick={() => simulateSandboxSuccess(pakasirData.qrString || '')}
-                      className="w-full bg-red-500 hover:bg-red-600 font-bold tracking-widest mt-4"
-                    >
-                      <CheckCircle2 className="w-5 h-5 mr-2" />
-                      SIMULASI LUNAS (SANDBOX)
-                    </Button>
-                  )}
+                  
 
                   <Button variant="outline" className="w-full font-bold uppercase tracking-widest mt-2" onClick={() => { if(pollingRef.current) clearInterval(pollingRef.current); setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' }); }}>
                     BATAL / KEMBALI
