@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight } from "lucide-react";
+import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1225,7 +1225,11 @@ export default function PosPage() {
                   {/* TOMBOL SIMULASI SANDBOX */}
                   {pakasirData.isSandbox && (
                     <Button 
-                      onClick={() => simulateSandboxSuccess(pakasirData.qrString || '')}
+                      onClick={() => {
+                        if (pollingRef.current) clearInterval(pollingRef.current);
+                        setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
+                        processCheckout(paymentMethod);
+                      }}
                       className="w-full bg-red-500 hover:bg-red-600 text-white font-bold tracking-widest mt-2"
                     >
                       <CheckCircle2 className="w-5 h-5 mr-2" />
