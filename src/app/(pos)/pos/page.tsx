@@ -459,7 +459,7 @@ export default function PosPage() {
         });
         pollPakasirStatus(orderId, amount);
       } else {
-        toast.warning("API Pakasir belum disetting (Mode Sandbox Aktif)");
+        toast.warning(res?.message || res?.error || res?.data?.message || res?.data?.error || "API Pakasir belum disetting (Mode Sandbox Aktif)"); console.error("Pakasir API Error:", res);
         setPakasirData({
           step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
           qrString: type === 'qris' ? 'SANDBOX-QR-' + Date.now() : '1234567890 (SANDBOX)',
