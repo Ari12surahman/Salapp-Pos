@@ -26,10 +26,10 @@ export async function POST(request: Request) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          project: payload.slug,
+          project: payload.slug?.trim(),
           order_id: payload.orderId,
           amount: payload.amount,
-          api_key: payload.apiKey
+          api_key: payload.apiKey?.trim()
         })
       });
 
@@ -46,10 +46,10 @@ export async function POST(request: Request) {
     else if (action === 'pollPakasirStatus') {
       // Endpoint is transactiondetail (GET)
       const params = new URLSearchParams({
-         project: payload.slug,
+         project: payload.slug?.trim(),
          order_id: payload.orderId,
          amount: String(payload.amount),
-         api_key: payload.apiKey
+         api_key: payload.apiKey?.trim()
       });
       const url = `https://app.pakasir.com/api/transactiondetail?${params.toString()}`;
       
