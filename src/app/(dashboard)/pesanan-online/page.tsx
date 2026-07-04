@@ -76,13 +76,14 @@ export default function PesananOnlinePage() {
          const processedOrders = waitingOrders.filter((o: any) => trxIds.includes(o.trxid));
          processedOrders.forEach((o: any) => {
              if (o.santriid) {
+                 const itemNames = o.items ? o.items.map((i: any) => `${i.nama} (${i.qty})`).join(', ') : 'beberapa jajanan';
                  fetch('https://sal-app-admin.vercel.app/api/notifikasi', {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ 
                          nis: o.santriid, 
                          title: 'Pesanan Diterima', 
-                         body: `Alhamdulillah, pesanan Titip Jajan senilai Rp ${Number(o.totalharga).toLocaleString('id-ID')} telah diterima oleh anak Anda.`
+                         body: `Alhamdulillah, pesanan Titip Jajan (${itemNames}) senilai Rp ${Number(o.totalharga).toLocaleString('id-ID')} telah diterima oleh anak Anda.`
                      })
                  }).catch(e => console.log('Push notif error:', e));
              }

@@ -369,13 +369,16 @@ export const supabaseServices = {
     // Trigger Notification to Wali
     if (payload.santriId) {
       try {
+        const itemNames = payload.items && payload.items.length > 0 
+          ? payload.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ') 
+          : 'beberapa jajanan';
         fetch('https://sal-app-admin.vercel.app/api/notifikasi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             nis: payload.santriId, 
             title: 'Info Jajan Kantin', 
-            body: `Ananda ${payload.buyerName || 'Santri'} baru saja jajan di kantin senilai Rp ${Number(payload.total).toLocaleString('id-ID')} menggunakan ${payload.method || 'Tunai'}.` 
+            body: `Ananda ${payload.buyerName || 'Santri'} baru saja jajan di kantin berupa ${itemNames} senilai Rp ${Number(payload.total).toLocaleString('id-ID')} menggunakan ${payload.method || 'Tunai'}.` 
           })
         }).catch(e => console.log('Push notif error:', e));
       } catch (e) {
