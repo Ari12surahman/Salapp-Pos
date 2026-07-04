@@ -55,12 +55,17 @@ export async function POST(request: any) {
            TrxID: trxId,
            SantriID: orderPayload.santriId || null,
            TotalHarga: orderPayload.total,
-           WaktuTransaksi: new Date().toISOString(),
-           Metode: orderPayload.method || 'QRIS',
-           StatusAmbil: orderPayload.statusAmbil || 'Selesai',
-           WarungID: orderPayload.warungId || 'WRG-KANTIN'
+           Waktu: new Date().toISOString(),
+           Metode: 'Pesanan Online',
+           StatusAmbil: 'Menunggu',
+           WarungID: orderPayload.warungId || 'WRG-KANTIN',
+           Catatan: orderPayload.catatan || ''
         };
-        await supabase.from('Transaksi').insert([trxData]);
+        const { error: trxError } = await supabase.from('Transaksi').insert([trxData]);
+        if (trxError) {
+          console.error("Error inserting Transaksi:", trxError);
+          return NextResponse.json({ error: 'Failed to insert transaction', detail: trxError.message }, { status: 500 });
+        }
 
         if (orderPayload.items && orderPayload.items.length > 0) {
            const details = orderPayload.items.map((i: any) => ({
@@ -70,7 +75,8 @@ export async function POST(request: any) {
              Kuantitas: i.quantity || i.qty || 1,
              HargaSatuan: i.price || i.harga || 0
            }));
-           await supabase.from('DetailTransaksi').insert(details);
+           const { error: detailError } = await supabase.from('DetailTransaksi').insert(details);
+           if (detailError) console.error("Error inserting DetailTransaksi:", detailError);
         }
 
         // Trigger Firebase Push Notification
