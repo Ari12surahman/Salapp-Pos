@@ -66,9 +66,9 @@ export async function POST(request: any) {
            const details = orderPayload.items.map((i: any) => ({
              TrxID: trxId,
              KodeProduk: i.id || '',
-             NamaProduk: i.name,
-             Kuantitas: i.quantity,
-             HargaSatuan: i.price
+             NamaProduk: i.name || i.nama || '',
+             Kuantitas: i.quantity || i.qty || 1,
+             HargaSatuan: i.price || i.harga || 0
            }));
            await supabase.from('DetailTransaksi').insert(details);
         }

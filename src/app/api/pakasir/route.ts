@@ -29,8 +29,7 @@ export async function POST(request: Request) {
           project: payload.slug?.trim(),
           order_id: payload.orderId,
           amount: payload.amount,
-          api_key: payload.apiKey?.trim(),
-          notification_url: 'https://salapp-pos.vercel.app/api/pakasir/webhook'
+          api_key: payload.apiKey?.trim()
         })
       });
 
