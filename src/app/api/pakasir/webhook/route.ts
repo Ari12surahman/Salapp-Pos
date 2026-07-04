@@ -63,7 +63,7 @@ export async function POST(request: any) {
         await supabase.from('Transaksi').insert([trxData]);
 
         if (orderPayload.items && orderPayload.items.length > 0) {
-           const details = orderPayload.items.map((i) => ({
+           const details = orderPayload.items.map((i: any) => ({
              TrxID: trxId,
              KodeProduk: i.id || '',
              NamaProduk: i.name,
@@ -77,7 +77,7 @@ export async function POST(request: any) {
         try {
           if (orderPayload.santriId) {
              const itemNames = orderPayload.items && orderPayload.items.length > 0 
-                ? orderPayload.items.map((i) => `${i.name} (${i.quantity})`).join(', ') 
+                ? orderPayload.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ') 
                 : 'beberapa jajanan';
              const notifBody = orderPayload.buyerName
                 ? `Ananda ${orderPayload.buyerName} baru saja jajan di kantin berupa ${itemNames} senilai Rp ${Number(orderPayload.total).toLocaleString('id-ID')} menggunakan ${orderPayload.method || 'QRIS'}.`
@@ -92,7 +92,7 @@ export async function POST(request: any) {
                    title: 'Info Jajan Kantin', 
                    body: notifBody
                 })
-             }).catch(e => console.error('Push notif error:', e));
+             }).catch((e: any) => console.error('Push notif error:', e));
           }
         } catch (e) {
           console.error("Notif error", e);
@@ -147,7 +147,7 @@ export async function POST(request: any) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Webhook Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
