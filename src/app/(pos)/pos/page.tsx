@@ -440,7 +440,7 @@ export default function PosPage() {
       }).then(r => r.json());
       const res = typeof response === 'string' ? JSON.parse(response) : response;
 
-      if (res?.status === 'success' || res?.checkout_url || (res?.data && res?.data?.status === 'success') || res?.payment) {
+      if (res?.status === 'success' || res?.checkout_url || (res?.data && (res?.data?.status === 'success' || res?.data?.payment_number)) || res?.payment || res?.payment_number) {
         const paymentData = res?.payment || res?.data || res;
         const checkoutUrl = paymentData.checkout_url || paymentData.url;
         const qrString = paymentData.payment_number || paymentData.qr_string || null;
