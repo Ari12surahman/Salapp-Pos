@@ -65,11 +65,28 @@ export default function PesananOnlinePage() {
       const payload = Array.isArray(trxIds) ? { trxIds, status: "Selesai" } : { trxId: trxIds, status: "Selesai" };
       return supabaseServices.updateStatusAmbil(payload);
     },
-    onSuccess: (res: any) => {
+    onSuccess: (res: any, variables: any) => {
       if(res.status === "success") {
          toast.success("Status pesanan berhasil diperbarui!");
          setSelectedOrders([]);
          queryClient.invalidateQueries({ queryKey: ['pesananOnline'] });
+         
+         // Kirim notifikasi ke orang tua
+         const trxIds = Array.isArray(variables) ? variables : [variables];
+         const processedOrders = waitingOrders.filter((o: any) => trxIds.includes(o.trxid));
+         processedOrders.forEach((o: any) => {
+             if (o.santriid) {
+                 fetch('https://sal-app-admin.vercel.app/api/notifikasi', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ 
+                         nis: o.santriid, 
+                         title: 'Pesanan Diterima', 
+                         body: `Alhamdulillah, pesanan Titip Jajan senilai Rp ${Number(o.totalharga).toLocaleString('id-ID')} telah diterima oleh anak Anda.`
+                     })
+                 }).catch(e => console.log('Push notif error:', e));
+             }
+         });
       } else {
          toast.error("Gagal: " + res.message);
       }
