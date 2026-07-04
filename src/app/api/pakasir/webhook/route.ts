@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export async function POST(request) {
+export async function POST(request: any) {
   try {
     const payload = await request.json();
     console.log("Incoming Webhook Pakasir:", payload);
