@@ -437,6 +437,8 @@ export default function PosPage() {
         buyerName: buyerData?.nama || pendingBuyer?.nama || "Guest",
         total: amount,
         method: type,
+        slug: savedDomain,
+        apiKey: savedApiKey,
         warungId: (user?.warungId === 'ALL' && cart.length > 0) ? (cart[0].warungId || 'ALL') : (user?.warungId || "UNKNOWN"),
         items: cart.map((c: any) => ({ id: c.id, name: c.name, price: c.price, quantity: c.quantity }))
       };

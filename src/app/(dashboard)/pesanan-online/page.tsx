@@ -26,15 +26,34 @@ export default function PesananOnlinePage() {
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['pesananOnline', user?.warungId],
     queryFn: () => supabaseServices.getPesananOnline({ warungId: user?.warungId || "ALL" }).then(res => res.status === 'success' ? res.data : []),
-    refetchInterval: 5000, // Poll every 5 seconds
     enabled: !!user,
   });
 
-  // Supabase realtime dimatikan sementara, polling GAS digunakan
-  // useEffect(() => {
-  //   const channel = supabase.channel('realtime:pesanan-online')
-  // ...
-  // }, [user, refetch, playDing]);
+  // Supabase realtime dihidupkan dengan filter 'Metode=Pesanan Online'
+  useEffect(() => {
+    if (!user) return;
+    
+    const channel = supabase
+      .channel('realtime-pesanan-online')
+      .on(
+        'postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'Transaksi',
+          filter: "Metode=eq.Pesanan Online"
+        }, 
+        (payload) => {
+          refetch();
+          playDing();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, refetch, playDing]);
 
   const { data: santriMasterData } = useQuery({
     queryKey: ['santriMaster'],
