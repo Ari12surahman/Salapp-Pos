@@ -127,7 +127,20 @@ export default function PosPage() {
     checkoutUrl: '',
     isSandbox: false
   });
+  const [pakasirTimeLeft, setPakasirTimeLeft] = useState(900);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    let timer: any;
+    if ((pakasirData.step === 'SHOW_QR' || pakasirData.step === 'SHOW_VA') && pakasirTimeLeft > 0) {
+      timer = setInterval(() => {
+        setPakasirTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (pakasirTimeLeft <= 0 && (pakasirData.step === 'SHOW_QR' || pakasirData.step === 'SHOW_VA')) {
+      clearInterval(timer);
+    }
+    return () => clearInterval(timer);
+  }, [pakasirData.step, pakasirTimeLeft]);
 
   // Closing State
   const [closingModalOpen, setClosingModalOpen] = useState(false);
@@ -466,7 +479,7 @@ export default function PosPage() {
         
         // Detect sandbox mode from the QR string response or VA dummy number
         const isSandboxServer = qrString && (qrString.toUpperCase().includes('SANDBOX') || qrString === '123123123');
-        
+        setPakasirTimeLeft(900);
         setPakasirData({
           step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
           qrString,
@@ -1162,24 +1175,60 @@ export default function PosPage() {
                 <div className="flex flex-col items-center gap-4 text-center">
                   <p className="font-bold uppercase tracking-widest">{paymentMethod} GENERATED</p>
                   
-                  {pakasirData.qrString ? (
-                    <div className="p-4 bg-white rounded-lg border-4 border-border relative">
-                      <QRCodeSVG value={pakasirData.qrString} size={200} />
-                      {pakasirData.isSandbox && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 font-bold text-red-600 text-xl rotate-[-20deg] border-4 border-red-600">
-                          SANDBOX MODE
+                  {pakasirTimeLeft > 0 ? (
+                    <>
+                      <p className="text-sm font-bold text-red-600 mb-1">
+                        Selesaikan pembayaran sebelum waktu habis: {Math.floor(pakasirTimeLeft / 60)}:{(pakasirTimeLeft % 60).toString().padStart(2, '0')}
+                      </p>
+                      <p className="text-xs font-bold text-red-600 text-center px-4 mb-4">
+                        ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
+                      </p>
+                      
+                      {pakasirData.qrString ? (
+                        <div className="flex flex-col items-center">
+                          <div className="p-4 bg-white rounded-lg border-4 border-border relative mb-4">
+                            <QRCodeSVG value={pakasirData.qrString} size={200} id="qris-svg" />
+                            {pakasirData.isSandbox && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-white/80 font-bold text-red-600 text-xl rotate-[-20deg] border-4 border-red-600">
+                                SANDBOX MODE
+                              </div>
+                            )}
+                          </div>
+                          <Button variant="outline" className="mb-4" onClick={() => {
+                            const svg = document.getElementById('qris-svg');
+                            if (svg) {
+                              const svgData = new XMLSerializer().serializeToString(svg);
+                              const canvas = document.createElement("canvas");
+                              const ctx = canvas.getContext("2d");
+                              const img = new Image();
+                              img.onload = () => {
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                ctx?.drawImage(img, 0, 0);
+                                const a = document.createElement("a");
+                                a.download = "QRIS.png";
+                                a.href = canvas.toDataURL("image/png");
+                                a.click();
+                              };
+                              img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+                            }
+                          }}>
+                            <Download className="w-4 h-4 mr-2" /> Download QRIS
+                          </Button>
                         </div>
-                      )}
-                    </div>
-                  ) : pakasirData.url ? (
-                    <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
-                      Buka Halaman Pembayaran
-                    </a>
-                  ) : null}
-                  
-                  <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
-                  </p>
+                      ) : pakasirData.url ? (
+                        <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
+                          Buka Halaman Pembayaran
+                        </a>
+                      ) : null}
+                      
+                      <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
+                  )}
 
                   {/* TOMBOL SIMULASI SANDBOX */}
                   {pakasirData.isSandbox && (
@@ -1209,37 +1258,50 @@ export default function PosPage() {
                 <div className="flex flex-col items-center gap-4 text-center">
                   <p className="font-bold uppercase tracking-widest">{paymentMethod} GENERATED</p>
                   
-                  {pakasirData.qrString && (
-                    <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
-                      <p className="text-xs font-semibold text-steel uppercase mb-1">Nomor Virtual Account</p>
-                      <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
-                    </div>
-                  )}
+                  {pakasirTimeLeft > 0 ? (
+                    <>
+                      <p className="text-sm font-bold text-red-600 mb-1">
+                        Selesaikan pembayaran sebelum waktu habis: {Math.floor(pakasirTimeLeft / 60)}:{(pakasirTimeLeft % 60).toString().padStart(2, '0')}
+                      </p>
+                      <p className="text-xs font-bold text-red-600 text-center px-4 mb-4">
+                        ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
+                      </p>
 
-                  <div className="flex w-full gap-2 mt-2">
-                    <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
-                        navigator.clipboard.writeText(pakasirData.qrString || '');
-                        toast.success("Nomor VA disalin");
-                    }}>
-                      <Copy className="w-4 h-4 mr-2" /> Salin VA
-                    </Button>
-                    <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
-                        navigator.clipboard.writeText(getCartTotal().toString());
-                        toast.success("Nominal disalin");
-                    }}>
-                      <Copy className="w-4 h-4 mr-2" /> Salin Nominal
-                    </Button>
-                  </div>
-                  
-                  {pakasirData.url && (
-                    <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
-                      Buka Halaman Pembayaran
-                    </a>
+                      {pakasirData.qrString && (
+                        <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
+                          <p className="text-xs font-semibold text-steel uppercase mb-1">Nomor Virtual Account</p>
+                          <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
+                        </div>
+                      )}
+
+                      <div className="flex w-full gap-2 mt-2">
+                        <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
+                            navigator.clipboard.writeText(pakasirData.qrString || '');
+                            toast.success("Nomor VA disalin");
+                        }}>
+                          <Copy className="w-4 h-4 mr-2" /> Salin VA
+                        </Button>
+                        <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
+                            navigator.clipboard.writeText(getCartTotal().toString());
+                            toast.success("Nominal disalin");
+                        }}>
+                          <Copy className="w-4 h-4 mr-2" /> Salin Nominal
+                        </Button>
+                      </div>
+                      
+                      {pakasirData.url && (
+                        <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
+                          Buka Halaman Pembayaran
+                        </a>
+                      )}
+                      
+                      <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2 mt-4">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
                   )}
-                  
-                  <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2 mt-4">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
-                  </p>
 
                   {/* TOMBOL SIMULASI SANDBOX */}
                   {pakasirData.isSandbox && (

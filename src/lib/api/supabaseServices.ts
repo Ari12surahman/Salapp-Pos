@@ -390,7 +390,7 @@ export const supabaseServices = {
   },
 
   getPencairanEligible: async (payload: any) => {
-    let q = supabase.from('Transaksi').select('*').eq('StatusPencairan', 'Belum Diajukan').neq('StatusAmbil', 'Batal');
+    let q = supabase.from('Transaksi').select('*').eq('StatusPencairan', 'Belum Diajukan').neq('StatusAmbil', 'Batal').neq('Metode', 'Tunai');
     if (payload?.warungId && payload.warungId !== 'ALL') q = q.eq('WarungID', payload.warungId);
     const { data, error } = await q;
     if (error) return { status: 'error', message: error.message };
