@@ -975,7 +975,7 @@ export default function PosPage() {
 
       {paymentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 print:hidden">
-          <div className="bg-card border-4 border-border w-full max-w-md flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] relative">
+          <div className="bg-card border-4 border-border w-full max-w-md flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => {
                 setPaymentModalOpen(false);
