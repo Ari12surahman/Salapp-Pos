@@ -378,6 +378,15 @@ export default function PosPage() {
           throw new Error((res.data && res.data.message) || res.message || "Gagal menyimpan transaksi");
         }
         setLastTransaction({ ...payload, trxId: res.data?.trxId, waktu: formatDateTimeID(new Date()), method });
+        
+        if (method === 'Tabungan') {
+          if (buyerData) {
+            setBuyerData((prev: any) => prev ? { ...prev, saldo: prev.saldo - getCartTotal() } : prev);
+          }
+          if (typeof refetchTabungan === 'function') {
+            refetchTabungan();
+          }
+        }
       } catch (err: any) {
         if (!navigator.onLine || err.message === "Network Error" || err.message === "Failed to fetch" || err.message?.includes("fetch")) {
           toast.warning("Koneksi terputus. Disimpan ke antrean offline.");
