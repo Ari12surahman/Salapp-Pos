@@ -352,17 +352,19 @@ export default function PosPage() {
       const activeSantriId = specificBuyerId || buyerId || "GUEST";
       let fcmToken = null;
       let buyerName = buyerData?.nama || "GUEST";
+      let exactNis = activeSantriId;
 
       if (santriMasterData && activeSantriId !== "GUEST") {
         const santri = santriMasterData.find((s: any) => String(s.nis).replace(/^0+/, '') === String(activeSantriId).replace(/^0+/, ''));
         if (santri) {
           fcmToken = santri.fcm_token;
           buyerName = santri.nama || buyerName;
+          exactNis = santri.nis;
         }
       }
 
       const payload = {
-        santriId: activeSantriId,
+        santriId: exactNis,
         warungId: (user?.warungId === 'ALL' && cart.length > 0) ? (cart[0].warungId || 'ALL') : (user?.warungId || "UNKNOWN"),
         method: method,
         total: getCartTotal(),
