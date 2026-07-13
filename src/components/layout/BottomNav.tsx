@@ -13,7 +13,9 @@ export function BottomNav({ onMenuClick }: { onMenuClick: () => void }) {
   useEffect(() => {
     const savedPerms = localStorage.getItem("userPermissions");
     if (savedPerms) {
-      setPerms(savedPerms.split(","));
+      const permsArray = savedPerms.split(",");
+      if (!permsArray.includes("cek-saldo")) permsArray.push("cek-saldo");
+      setPerms(permsArray);
     } else {
       setPerms(["dashboard", "pos", "pesanan-online", "pencairan", "produk", "santri", "warung", "topup", "laporan", "cashflow", "pengaturan"]);
     }

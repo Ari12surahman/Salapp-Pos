@@ -50,7 +50,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     // Simulasi atau baca dari localStorage setelah fitur login jadi
     const savedPerms = localStorage.getItem("userPermissions");
     if (savedPerms) {
-      setPerms(savedPerms.split(","));
+      const permsArray = savedPerms.split(",");
+      if (!permsArray.includes("cek-saldo")) permsArray.push("cek-saldo");
+      setPerms(permsArray);
     } else {
       // Jika belum login, tampilkan semua sementara waktu
       setPerms(["dashboard", "pos", "pesanan-online", "pencairan", "cek-saldo", "produk", "santri", "warung", "topup", "laporan", "cashflow", "pengaturan"]);

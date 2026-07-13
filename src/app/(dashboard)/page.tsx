@@ -20,6 +20,8 @@ export default function Home() {
     const savedPerms = localStorage.getItem("userPermissions");
     if (savedPerms) {
       const permsArray = savedPerms.split(",");
+      if (!permsArray.includes("cek-saldo")) permsArray.push("cek-saldo");
+      
       if (!permsArray.includes("dashboard")) {
         // Find the first dashboard route they have access to so they don't get trapped in /pos
         const dashboardRoutes = ["produk", "santri", "warung", "topup", "laporan", "pengaturan", "cashflow"];
