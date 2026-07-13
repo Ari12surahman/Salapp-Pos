@@ -34,7 +34,7 @@ export default function Home() {
       }
     } else {
       // Default to allowed if no permissions found (for dev/fallback)
-      setPerms(["dashboard", "pos", "produk", "santri", "warung", "topup", "laporan", "pengaturan", "cashflow"]);
+      setPerms(["dashboard", "pos", "cek-saldo", "produk", "santri", "warung", "topup", "laporan", "pengaturan", "cashflow"]);
     }
   }, [router]);
 
@@ -147,6 +147,20 @@ export default function Home() {
             <div>
               <h2 className="text-2xl font-bold uppercase tracking-tight">Saldo</h2>
               <p className="text-sm text-muted-foreground mt-1">Top up dan riwayat mutasi.</p>
+            </div>
+            <ArrowRight className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-2" />
+          </Link>
+        )}
+
+        {hasAccess("cek-saldo") && (
+          <Link href="/cek-saldo" className="group p-6 flex flex-col gap-4 hover:bg-muted transition-colors">
+            <div className="flex justify-between items-center">
+              <Wallet className="w-8 h-8" />
+              <span className="font-mono text-xs border border-current px-2 py-1">/CEKSALDO</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold uppercase tracking-tight">Cek Saldo</h2>
+              <p className="text-sm text-muted-foreground mt-1">Cek saldo via scan RFID.</p>
             </div>
             <ArrowRight className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-2" />
           </Link>

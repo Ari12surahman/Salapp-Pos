@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet } from "lucide-react";
+import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,12 +46,7 @@ export default function PosPage() {
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [showPrint, setShowPrint] = useState(false);
   const [showTempPrint, setShowTempPrint] = useState(false);
-  const [scannerOpen, setScannerOpen] = useState<{ isOpen: boolean, target: 'product' | 'santri' | 'ceksaldo' }>({ isOpen: false, target: 'product' });
-
-  // Cek Saldo State
-  const [cekSaldoModalOpen, setCekSaldoModalOpen] = useState(false);
-  const [cekSaldoInput, setCekSaldoInput] = useState("");
-  const [cekSaldoData, setCekSaldoData] = useState<{ status: 'idle' | 'success' | 'error', nama?: string, saldo?: number, message?: string }>({ status: 'idle' });
+  const [scannerOpen, setScannerOpen] = useState<{ isOpen: boolean, target: 'product' | 'santri' }>({ isOpen: false, target: 'product' });
 
   const { playBeep, playDing, playError } = useAudio();
   const { addPending } = useSyncStore();
@@ -324,41 +319,6 @@ export default function PosPage() {
       toast.error("PIN Salah!");
       playError();
       setEnteredPin("");
-    }
-  };
-
-  const handleCekSaldo = (id: string) => {
-    if (!id) return;
-    try {
-      if (santriMasterData) {
-        const foundSantri = santriMasterData.find((s: any) => String(s.nis) === String(id) || String(s.uid) === String(id));
-        if (foundSantri) {
-          let saldo = 0;
-          if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
-            const sNisClean = String(foundSantri.nis).replace(/^0+/, '');
-            const foundTabunganRows = tabunganMasterData.filter((t: any) => 
-              String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
-            );
-            saldo = foundTabunganRows.reduce((sum: number, t: any) => {
-              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
-              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
-              return jenis === 'tarik' ? sum - nom : sum + nom;
-            }, 0);
-          }
-          setCekSaldoData({ status: 'success', nama: foundSantri.nama, saldo: saldo });
-          playDing();
-          setCekSaldoInput("");
-        } else {
-          setCekSaldoData({ status: 'error', message: 'Santri (RFID/NIS) tidak ditemukan' });
-          playError();
-          setCekSaldoInput("");
-        }
-      } else {
-        toast.error("Data master santri belum siap.");
-      }
-    } catch (err) {
-      setCekSaldoData({ status: 'error', message: 'Gagal mengecek saldo' });
-      playError();
     }
   };
 
@@ -757,14 +717,8 @@ export default function PosPage() {
             >
               <RefreshCw className={`w-4 h-4 ${isFetchingProducts || isFetchingSantri || isFetchingTabungan ? "animate-spin" : ""}`} />
             </Button>
-            <Button variant="outline" className="font-bold hidden lg:flex gap-2 shrink-0" onClick={() => setCekSaldoModalOpen(true)}>
-              <Wallet className="w-4 h-4" /> CEK SALDO
-            </Button>
-            <Button variant="outline" size="icon" className="lg:hidden shrink-0" onClick={() => setCekSaldoModalOpen(true)}>
-              <Wallet className="w-4 h-4" />
-            </Button>
             <Button variant="outline" size="icon" className="shrink-0"><Filter className="w-4 h-4" /></Button>
-            <Button variant="secondary" onClick={handleClosing} className="font-bold hidden lg:flex shrink-0">
+            <Button variant="secondary" onClick={handleClosing} className="font-bold hidden lg:flex">
               TUTUP KASIR
             </Button>
             <Button variant="secondary" size="icon" onClick={handleClosing} className="lg:hidden shrink-0">
@@ -1778,9 +1732,6 @@ export default function PosPage() {
             } else if (target === 'santri') {
               setBuyerId(text);
               checkSantri(text);
-            } else if (target === 'ceksaldo') {
-              setCekSaldoInput(text);
-              handleCekSaldo(text);
             }
           }}
         />
@@ -1814,59 +1765,6 @@ export default function PosPage() {
             <div className={`border-t-4 p-2 flex justify-between items-center font-mono text-[10px] uppercase ${checkoutAlert.type === 'success' ? 'border-green-600 bg-green-600/10' : 'border-red-600 bg-red-600/10'}`}>
               <span className="animate-pulse font-bold">» AUTO_CLOSING_ROUTINE_ACTIVE...</span>
               <span className="opacity-50">SYS_REV 1.0 // POS_TERMINAL</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CEK SALDO */}
-      {cekSaldoModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-card border-4 border-border flex flex-col shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] dark:shadow-[12px_12px_0px_0px_rgba(255,255,255,1)]">
-            <div className="bg-primary text-primary-foreground p-4 flex justify-between items-center border-b-4 border-border">
-              <h2 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                <Wallet className="w-5 h-5" /> CEK SALDO
-              </h2>
-              <button onClick={() => { setCekSaldoModalOpen(false); setCekSaldoInput(""); setCekSaldoData({ status: 'idle' }); }} className="font-bold text-xl leading-none hover:text-red-300 transition-colors">&times;</button>
-            </div>
-            <div className="p-6 flex flex-col gap-6">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input 
-                    placeholder="Scan RFID / Ketik NIS..." 
-                    className="font-mono text-center uppercase text-lg h-12"
-                    value={cekSaldoInput}
-                    onChange={(e) => setCekSaldoInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleCekSaldo(cekSaldoInput);
-                    }}
-                    autoFocus
-                  />
-                </div>
-                <Button variant="outline" className="h-12 w-12 shrink-0 p-0" onClick={() => setScannerOpen({ isOpen: true, target: 'ceksaldo' })}>
-                  <Camera className="w-5 h-5" />
-                </Button>
-                <Button className="h-12 px-6 font-bold" onClick={() => handleCekSaldo(cekSaldoInput)}>CEK</Button>
-              </div>
-
-              {cekSaldoData.status === 'success' && (
-                <div className="bg-green-600/10 border-2 border-green-600 p-6 flex flex-col items-center text-center animate-in zoom-in duration-300">
-                  <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-1">IDENTITAS SANTRI</span>
-                  <p className="text-2xl font-black uppercase text-green-800 dark:text-green-300 mb-4">{cekSaldoData.nama}</p>
-                  
-                  <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-1 border-t border-green-600/30 pt-4 w-full">SISA SALDO AKTIF</span>
-                  <p className="text-4xl font-mono font-bold tracking-tighter text-green-600 dark:text-green-400">
-                    Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
-                  </p>
-                </div>
-              )}
-
-              {cekSaldoData.status === 'error' && (
-                <div className="bg-red-600/10 border-2 border-red-600 p-6 flex flex-col items-center text-center animate-in zoom-in duration-300">
-                  <X className="w-12 h-12 text-red-600 mb-2" />
-                  <p className="text-lg font-bold text-red-600 uppercase">{cekSaldoData.message}</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

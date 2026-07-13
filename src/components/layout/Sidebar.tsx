@@ -53,7 +53,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       setPerms(savedPerms.split(","));
     } else {
       // Jika belum login, tampilkan semua sementara waktu
-      setPerms(["dashboard", "pos", "pesanan-online", "pencairan", "produk", "santri", "warung", "topup", "laporan", "cashflow", "pengaturan"]);
+      setPerms(["dashboard", "pos", "pesanan-online", "pencairan", "cek-saldo", "produk", "santri", "warung", "topup", "laporan", "cashflow", "pengaturan"]);
     }
 
     // Tangkap event PWA Install Prompt
@@ -135,6 +135,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Link href="/pencairan" onClick={handleNavigate} className="flex items-center gap-3 px-3 py-2 text-sm font-bold uppercase hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent hover:border-border">
             <Wallet className="w-4 h-4" />
             Pencairan Dana
+          </Link>
+        )}
+        {hasAccess("cek-saldo") && (
+          <Link href="/cek-saldo" onClick={handleNavigate} className="flex items-center gap-3 px-3 py-2 text-sm font-bold uppercase hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent hover:border-border">
+            <Wallet className="w-4 h-4" />
+            Cek Saldo
           </Link>
         )}
 
