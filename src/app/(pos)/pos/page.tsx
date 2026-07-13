@@ -1081,11 +1081,12 @@ export default function PosPage() {
 
               {pakasirData.step === 'SCAN_TABUNGAN' && (
                 <div className="flex flex-col gap-4">
-                  <p className="font-bold uppercase tracking-widest text-center">SCAN RFID / NIS</p>
+                  <p className="font-bold uppercase tracking-widest text-center">SCAN RFID</p>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Input 
-                        placeholder="Scan RFID / NIS..." 
+                        type="password"
+                        placeholder="Scan RFID..." 
                         className="font-mono uppercase text-sm pr-10 h-14 rounded-xl" 
                         value={buyerId}
                         onChange={(e) => setBuyerId(e.target.value)}

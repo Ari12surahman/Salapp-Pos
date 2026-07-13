@@ -77,13 +77,14 @@ export default function CekSaldoPage() {
         <div className="w-full max-w-md flex flex-col gap-8 relative z-10">
           <div className="text-center space-y-2">
             <h2 className="font-bold uppercase tracking-widest text-lg">SCAN KARTU RFID</h2>
-            <p className="font-mono text-sm text-muted-foreground">Silakan tempelkan kartu pada scanner atau ketik manual NIS.</p>
+            <p className="font-mono text-sm text-muted-foreground">Silakan tempelkan kartu pada scanner.</p>
           </div>
 
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Input 
-                placeholder="Scan RFID / Ketik NIS..." 
+                type="password"
+                placeholder="Scan RFID..." 
                 className="font-mono text-center uppercase text-xl h-14"
                 value={cekSaldoInput}
                 onChange={(e) => setCekSaldoInput(e.target.value)}
