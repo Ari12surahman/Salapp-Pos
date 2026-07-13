@@ -25,6 +25,8 @@ export default function ProdukPage() {
   const [isEdit, setIsEdit] = useState(false);
   const [isEditKategori, setIsEditKategori] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -126,6 +128,29 @@ export default function ProdukPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const confirmed = await useConfirmStore.getState().showConfirm({
+      title: "HAPUS PRODUK",
+      message: `Apakah Anda yakin ingin menghapus ${selectedIds.length} produk secara permanen?`,
+    });
+    if (!confirmed) return;
+    
+    setDeleting(true);
+    try {
+      for (const id of selectedIds) {
+        await api.post('hapusProduk', { id });
+      }
+      toast.success(`${selectedIds.length} Produk berhasil dihapus!`);
+      setSelectedIds([]);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      await fetchProducts();
+    } catch (err) {
+      toast.error("Gagal menghapus beberapa produk.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -204,6 +229,18 @@ export default function ProdukPage() {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === paginatedData.length && paginatedData.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedData.map(item => item.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   const filteredKategori = kategoriData.filter(k => {
     const wId = k.warungid || k.WarungID || k.warungId;
     return !user?.warungId || user.warungId === 'ALL' || wId === user.warungId;
@@ -219,6 +256,11 @@ export default function ProdukPage() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          {selectedIds.length > 0 && (
+            <Button variant="destructive" className="flex-1 sm:flex-none gap-2" onClick={handleBulkDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} HAPUS ({selectedIds.length})
+            </Button>
+          )}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
@@ -250,6 +292,14 @@ export default function ProdukPage() {
           <table className="w-full text-left font-mono text-sm">
             <thead className="bg-muted border-b-2 border-border">
               <tr>
+                <th className="p-3 w-10 text-center">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 cursor-pointer" 
+                    checked={paginatedData.length > 0 && selectedIds.length === paginatedData.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th className="p-3 uppercase tracking-wider">BARCODE</th>
                 <th className="p-3 uppercase tracking-wider">WARUNG</th>
                 <th className="p-3 uppercase tracking-wider">NAMA PRODUK</th>
@@ -263,6 +313,14 @@ export default function ProdukPage() {
             <tbody className="divide-y divide-border">
               {paginatedData.map((item, idx) => (
                 <tr key={`${item.id}-${idx}`} className="hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <td className="p-3 text-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 cursor-pointer"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                    />
+                  </td>
                   <td className="p-3 font-bold">{item.barcode}</td>
                   <td className="p-3 text-xs uppercase text-muted-foreground">{item.warungid || item.WarungID}</td>
                   <td className="p-3 font-sans uppercase font-bold">{item.nama}</td>
@@ -284,7 +342,7 @@ export default function ProdukPage() {
               ))}
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground uppercase tracking-widest">
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground uppercase tracking-widest">
                     PRODUK TIDAK DITEMUKAN
                   </td>
                 </tr>
