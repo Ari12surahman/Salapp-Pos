@@ -26,6 +26,8 @@ export default function CashflowPage() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Modals
   const [showForm, setShowForm] = useState(false);
@@ -112,6 +114,9 @@ export default function CashflowPage() {
 
     return true;
   });
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const totalMasuk = filteredData.filter(d => (d.tipekas || d.TipeKas) === 'MASUK').reduce((acc, curr) => acc + Number(curr.nominal || curr.Nominal || 0), 0);
   const totalKeluar = filteredData.filter(d => (d.tipekas || d.TipeKas) === 'KELUAR').reduce((acc, curr) => acc + Number(curr.nominal || curr.Nominal || 0), 0);
@@ -391,7 +396,7 @@ export default function CashflowPage() {
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="flex items-center gap-2 bg-background border-2 border-border px-3 py-1.5">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            <select className="bg-transparent border-none outline-none text-sm font-mono uppercase cursor-pointer" value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)}>
+            <select className="bg-transparent border-none outline-none text-sm font-mono uppercase cursor-pointer" value={filterPeriod} onChange={(e) => { setFilterPeriod(e.target.value); setCurrentPage(1); }}>
               <option value="all">Semua Waktu</option>
               <option value="today">Hari Ini</option>
               <option value="week">Minggu Ini</option>
@@ -403,12 +408,12 @@ export default function CashflowPage() {
           {filterPeriod === "custom" && (
             <div className="flex items-center gap-2 bg-background border-2 border-border px-3 py-1.5 text-sm font-mono">
               <span>Dari</span>
-              <input type="date" className="bg-transparent border-none outline-none cursor-pointer" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} />
+              <input type="date" className="bg-transparent border-none outline-none cursor-pointer" value={filterStartDate} onChange={e => { setFilterStartDate(e.target.value); setCurrentPage(1); }} />
               <span>Sampai</span>
-              <input type="date" className="bg-transparent border-none outline-none cursor-pointer" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} />
+              <input type="date" className="bg-transparent border-none outline-none cursor-pointer" value={filterEndDate} onChange={e => { setFilterEndDate(e.target.value); setCurrentPage(1); }} />
             </div>
           )}
-          <select className="bg-background border-2 border-border px-3 py-2 text-sm font-mono uppercase cursor-pointer" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          <select className="bg-background border-2 border-border px-3 py-2 text-sm font-mono uppercase cursor-pointer" value={filterType} onChange={(e) => { setFilterType(e.target.value); setCurrentPage(1); }}>
             <option value="all">Semua Tipe</option>
             <option value="MASUK">Hanya Pemasukan</option>
             <option value="KELUAR">Hanya Pengeluaran</option>
@@ -418,7 +423,7 @@ export default function CashflowPage() {
             placeholder="Cari keterangan/kategori..." 
             className="bg-background border-2 border-border px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary w-full md:w-auto"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
           />
         </div>
         
@@ -465,7 +470,7 @@ export default function CashflowPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredData.map((item) => {
+                {paginatedData.map((item) => {
                   const type = item.tipekas || item.TipeKas;
                   return (
                     <tr key={item.id} className="hover:bg-accent transition-colors">
@@ -505,6 +510,26 @@ export default function CashflowPage() {
               </tbody>
             </table>
           </div>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20">
+              <Button 
+                variant="outline" 
+                disabled={currentPage === 1} 
+                onClick={() => setCurrentPage(p => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="font-mono text-sm uppercase">Halaman {currentPage} dari {totalPages}</span>
+              <Button 
+                variant="outline" 
+                disabled={currentPage === totalPages} 
+                onClick={() => setCurrentPage(p => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

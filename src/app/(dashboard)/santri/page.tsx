@@ -25,6 +25,8 @@ export default function SantriPage() {
   const [data, setData] = useState<Santri[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [selectedSantri, setSelectedSantri] = useState<Santri | null>(null);
   const [randomId, setRandomId] = useState<string>("");
   const [printQRMode, setPrintQRMode] = useState(false);
@@ -170,6 +172,9 @@ export default function SantriPage() {
     s.rfid?.includes(search)
   );
 
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex flex-col gap-6 print:p-0 print:max-w-full">
       {/* NORMAL VIEW */}
@@ -192,7 +197,7 @@ export default function SantriPage() {
                 placeholder="Cari NIS / Nama / RFID..." 
                 className="pl-9 font-mono uppercase"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               />
             </div>
             <Button variant="secondary">SYNC</Button>
@@ -233,7 +238,7 @@ export default function SantriPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredData.map((item, index) => (
+                {paginatedData.map((item, index) => (
                   <tr key={index} className="hover:bg-accent hover:text-accent-foreground transition-colors">
                     <td className="p-3 font-bold">{item.nis}</td>
                     <td className="p-3 font-sans uppercase font-bold">{item.nama}</td>
@@ -267,6 +272,26 @@ export default function SantriPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {totalPages > 1 && !loading && (
+          <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20 print:hidden">
+            <Button 
+              variant="outline" 
+              disabled={currentPage === 1} 
+              onClick={() => setCurrentPage(p => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="font-mono text-sm uppercase">Halaman {currentPage} dari {totalPages}</span>
+            <Button 
+              variant="outline" 
+              disabled={currentPage === totalPages} 
+              onClick={() => setCurrentPage(p => p + 1)}
+            >
+              Next
+            </Button>
           </div>
         )}
       </div>

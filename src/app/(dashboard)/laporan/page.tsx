@@ -18,6 +18,20 @@ export default function LaporanPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  const getValGlobal = (item: any, keys: string[]) => {
+    for (const k of keys) {
+      for (const itemKey in item) {
+        if (itemKey.replace(/\s+/g, '').toLowerCase() === k.toLowerCase()) {
+          return item[itemKey];
+        }
+      }
+    }
+    return null;
+  };
 
   const fetchTransaksi = (background = false) => {
     if (!background) setLoading(true);
@@ -272,6 +286,17 @@ export default function LaporanPage() {
     }
   };
 
+  const filteredData = data.filter(t => {
+    if (!search) return true;
+    const trxId = getValGlobal(t, ['idtransaksi', 'trxid', 'id']) || "";
+    const pembeli = getValGlobal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "";
+    const query = search.toLowerCase();
+    return String(trxId).toLowerCase().includes(query) || String(pembeli).toLowerCase().includes(query);
+  });
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex flex-col gap-6 relative">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b-2 border-border pb-4 print:hidden">
@@ -281,7 +306,14 @@ export default function LaporanPage() {
             DATA EKSPOR HARIAN
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <input 
+            type="text" 
+            placeholder="Cari ID / NIS..." 
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            className="border-2 border-border p-2 font-mono text-sm uppercase w-full md:w-48 bg-background"
+          />
           {selectedIds.length > 0 && (
             <Button variant="destructive" className="gap-2" onClick={() => handleDelete(selectedIds)} disabled={deleting}>
               {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
@@ -370,7 +402,7 @@ export default function LaporanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border print:divide-black">
-                {data.map((item, idx) => {
+                {paginatedData.map((item, idx) => {
                   const getVal = (keys: string[]) => {
                     for (const k of keys) {
                       for (const itemKey in item) {
@@ -425,6 +457,26 @@ export default function LaporanPage() {
               </tbody>
             </table>
           </div>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20 print:hidden">
+              <Button 
+                variant="outline" 
+                disabled={currentPage === 1} 
+                onClick={() => setCurrentPage(p => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="font-mono text-sm uppercase">Halaman {currentPage} dari {totalPages}</span>
+              <Button 
+                variant="outline" 
+                disabled={currentPage === totalPages} 
+                onClick={() => setCurrentPage(p => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

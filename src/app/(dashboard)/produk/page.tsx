@@ -26,6 +26,10 @@ export default function ProdukPage() {
   const [isEditKategori, setIsEditKategori] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Form State
   const [formData, setFormData] = useState({
     nama: "", kategori: "", modal: 0, jual: 0, stok: 0, barcode: "", warungId: ""
@@ -197,6 +201,9 @@ export default function ProdukPage() {
     return matchesSearch && matchesWarung;
   });
 
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   const filteredKategori = kategoriData.filter(k => {
     const wId = k.warungid || k.WarungID || k.warungId;
     return !user?.warungId || user.warungId === 'ALL' || wId === user.warungId;
@@ -218,7 +225,7 @@ export default function ProdukPage() {
               placeholder="Cari Nama / Barcode..." 
               className="pl-9 font-mono uppercase w-full"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             />
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -254,7 +261,7 @@ export default function ProdukPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredData.map((item, idx) => (
+              {paginatedData.map((item, idx) => (
                 <tr key={`${item.id}-${idx}`} className="hover:bg-accent hover:text-accent-foreground transition-colors">
                   <td className="p-3 font-bold">{item.barcode}</td>
                   <td className="p-3 text-xs uppercase text-muted-foreground">{item.warungid || item.WarungID}</td>
@@ -285,6 +292,26 @@ export default function ProdukPage() {
             </tbody>
           </table>
         </div>
+        )}
+        
+        {totalPages > 1 && !loading && (
+          <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20">
+            <Button 
+              variant="outline" 
+              disabled={currentPage === 1} 
+              onClick={() => setCurrentPage(p => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="font-mono text-sm uppercase">Halaman {currentPage} dari {totalPages}</span>
+            <Button 
+              variant="outline" 
+              disabled={currentPage === totalPages} 
+              onClick={() => setCurrentPage(p => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
         )}
       </div>
 

@@ -22,7 +22,15 @@ export default function LoginPage() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
 
+  const [isHydrated, setIsHydrated] = useState(false);
+
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    
     // If already authenticated, redirect immediately
     if (isAuthenticated && currentUser) {
       const perms = currentUser.permissions || "pos";
@@ -56,7 +64,7 @@ export default function LoginPage() {
     };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-  }, [isAuthenticated, currentUser, router]);
+  }, [isHydrated, isAuthenticated, currentUser, router]);
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {
@@ -91,7 +99,7 @@ export default function LoginPage() {
   };
 
   // If already authenticated, don't show the login form (prevents flicker before redirect)
-  if (isAuthenticated) return null;
+  if (!isHydrated || isAuthenticated) return null;
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-4 px-4">
