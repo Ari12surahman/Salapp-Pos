@@ -244,7 +244,7 @@ export default function PosPage() {
   const checkSantri = async (overrideId?: string) => {
     const idToCheck = overrideId || buyerId;
     if (!idToCheck) {
-      toast.warning("Scan atau ketik NIS terlebih dahulu!");
+      toast.warning("Scan RFID terlebih dahulu!");
       return;
     }
     
@@ -1121,8 +1121,12 @@ export default function PosPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="p-4 rounded-xl border-2 border-dashed border-border bg-muted/30 text-center text-muted-foreground font-mono text-sm">
-                      Silakan scan RFID atau masukkan NIS santri
+                    <div className="border-4 border-dashed border-muted p-8 flex flex-col items-center text-center w-full justify-center opacity-50 mt-4 rounded-xl">
+                      <CreditCard className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
+                      <p className="text-xl font-black text-muted-foreground uppercase tracking-tighter">MENUNGGU SCAN</p>
+                      <p className="text-sm font-mono text-muted-foreground mt-2">
+                        Silakan scan RFID santri
+                      </p>
                     </div>
                   )}
 

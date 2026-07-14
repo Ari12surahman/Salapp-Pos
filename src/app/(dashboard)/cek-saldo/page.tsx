@@ -48,7 +48,7 @@ export default function CekSaldoPage() {
           playDing();
           setCekSaldoInput("");
         } else {
-          setCekSaldoData({ status: 'error', message: 'Santri (RFID/NIS) tidak ditemukan' });
+          setCekSaldoData({ status: 'error', message: 'Kartu RFID tidak dikenali' });
           playError();
           setCekSaldoInput("");
         }
