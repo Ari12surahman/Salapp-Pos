@@ -458,7 +458,7 @@ export default function LaporanPage() {
             </table>
           </div>
           
-          {totalPages > 1 && (
+          {totalPages > 0 && (
             <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20 print:hidden">
               <Button 
                 variant="outline" 

@@ -1085,7 +1085,9 @@ export default function PosPage() {
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Input 
-                        type="password"
+                        type="text"
+                        style={{ WebkitTextSecurity: 'disc' }}
+                        autoComplete="off"
                         placeholder="Scan RFID..." 
                         className="font-mono uppercase text-sm pr-10 h-14 rounded-xl" 
                         value={buyerId}

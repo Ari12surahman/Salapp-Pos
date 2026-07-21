@@ -83,7 +83,9 @@ export default function CekSaldoPage() {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Input 
-                type="password"
+                type="text"
+                style={{ WebkitTextSecurity: 'disc' }}
+                autoComplete="off"
                 placeholder="Scan RFID..." 
                 className="font-mono text-center uppercase text-xl h-14"
                 value={cekSaldoInput}

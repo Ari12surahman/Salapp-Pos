@@ -352,7 +352,7 @@ export default function ProdukPage() {
         </div>
         )}
         
-        {totalPages > 1 && !loading && (
+        {totalPages > 0 && !loading && (
           <div className="flex items-center justify-between p-4 border-t-2 border-border bg-muted/20">
             <Button 
               variant="outline" 

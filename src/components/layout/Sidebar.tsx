@@ -9,6 +9,7 @@ import {
   Users, 
   Store,
   Wallet,
+  CreditCard,
   Settings,
   LogOut,
   ShoppingBag,
@@ -141,7 +142,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         )}
         {hasAccess("cek-saldo") && (
           <Link href="/cek-saldo" onClick={handleNavigate} className="flex items-center gap-3 px-3 py-2 text-sm font-bold uppercase hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent hover:border-border">
-            <Wallet className="w-4 h-4" />
+            <CreditCard className="w-4 h-4" />
             Cek Saldo
           </Link>
         )}
