@@ -337,6 +337,29 @@ export const supabaseServices = {
   },
 
   simpanTransaksiOffline: async (payload: any) => {
+    // Validasi Limit Jajan Harian untuk Tabungan
+    if (payload.method === 'Tabungan' && payload.santriId) {
+      const { data: santri } = await supabase.from('Data Santri').select('limit_jajan_harian').eq('nis', payload.santriId).single();
+      const limitJajan = Number(santri?.limit_jajan_harian || 0);
+
+      if (limitJajan > 0) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: tabungan } = await supabase
+          .from('Tabungan')
+          .select('nominal')
+          .eq('nis', payload.santriId)
+          .eq('jenis', 'Tarik')
+          .eq('tanggal', todayStr)
+          .ilike('keterangan', '%kantin%');
+
+        const totalJajanHariIni = (tabungan || []).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+
+        if (totalJajanHariIni + payload.total > limitJajan) {
+          return { status: 'error', message: `Transaksi ditolak: Melebihi limit jajan harian. Sisa limit: Rp ${(limitJajan - totalJajanHariIni > 0 ? limitJajan - totalJajanHariIni : 0).toLocaleString('id-ID')}` };
+        }
+      }
+    }
+
     const trxId = "TRX-" + new Date().getTime();
     const { error } = await supabase.from('Transaksi').insert({
       TrxID: trxId, Waktu: new Date().toISOString(), SantriID: payload.santriId, WarungID: payload.warungId || "UNKNOWN",
