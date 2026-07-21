@@ -806,7 +806,7 @@ export default function PosPage() {
               <div key={item.id} className="flex flex-col border border-border p-3 gap-2">
                 <div className="flex justify-between items-start">
                   <span className="font-bold text-sm uppercase">{item.name}</span>
-                  <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:bg-destructive/10 p-1">
+                  <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:bg-destructive/10 p-1" tabIndex={-1} onFocus={(e) => e.target.blur()}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -815,11 +815,13 @@ export default function PosPage() {
                     <button 
                       onClick={() => updateQuantity(item.id, item.quantity - 1)}
                       className="px-2 py-1 bg-muted hover:bg-accent font-mono"
+                      tabIndex={-1} onFocus={(e) => e.target.blur()}
                     >-</button>
                     <span className="px-3 py-1 font-mono text-sm">{item.quantity}</span>
                     <button 
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
                       className="px-2 py-1 bg-muted hover:bg-accent font-mono"
+                      tabIndex={-1} onFocus={(e) => e.target.blur()}
                     >+</button>
                   </div>
                   <span className="font-mono font-bold">Rp {Number((item.price || 0) * item.quantity).toLocaleString('id-ID')}</span>
@@ -901,7 +903,7 @@ export default function PosPage() {
                   <div key={item.id} className="flex flex-col border border-border bg-card rounded-xl p-4 shadow-sm gap-3">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-bold text-sm leading-tight flex-1">{item.name}</span>
-                      <button onClick={() => removeFromCart(item.id)} className="text-destructive bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground transition-colors p-2 rounded-lg shrink-0 w-10 h-10 flex items-center justify-center">
+                      <button onClick={() => removeFromCart(item.id)} className="text-destructive bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground transition-colors p-2 rounded-lg shrink-0 w-10 h-10 flex items-center justify-center" tabIndex={-1} onFocus={(e) => e.target.blur()}>
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
@@ -910,11 +912,13 @@ export default function PosPage() {
                         <button 
                           onClick={() => updateQuantity(item.id, item.quantity - 1)}
                           className="w-10 h-10 flex items-center justify-center bg-background rounded-md shadow-sm font-bold active:scale-95"
+                          tabIndex={-1} onFocus={(e) => e.target.blur()}
                         >-</button>
                         <span className="w-10 text-center font-bold text-sm">{item.quantity}</span>
                         <button 
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
                           className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded-md shadow-sm font-bold active:scale-95"
+                          tabIndex={-1} onFocus={(e) => e.target.blur()}
                         >+</button>
                       </div>
                       <span className="font-black text-lg tracking-tighter">Rp {Number((item.price || 0) * item.quantity).toLocaleString('id-ID')}</span>
