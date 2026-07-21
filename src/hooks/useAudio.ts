@@ -61,9 +61,13 @@ export function useAudio() {
     }
   }, []);
 
+  const playBeep = useCallback(() => playSound("beep"), [playSound]);
+  const playDing = useCallback(() => playSound("ding"), [playSound]);
+  const playError = useCallback(() => playSound("error"), [playSound]);
+
   return {
-    playBeep: () => playSound("beep"),
-    playDing: () => playSound("ding"),
-    playError: () => playSound("error"),
+    playBeep,
+    playDing,
+    playError,
   };
 }

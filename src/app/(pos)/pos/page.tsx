@@ -203,8 +203,8 @@ export default function PosPage() {
       }
       
       const currentTime = Date.now();
-      // Reset buffer jika jeda antar ketikan lebih dari 50ms (berarti diketik manual oleh manusia)
-      if (currentTime - lastKeyTimeRef.current > 50) {
+      // Reset buffer jika jeda antar ketikan lebih dari 100ms (berarti diketik manual oleh manusia)
+      if (currentTime - lastKeyTimeRef.current > 100) {
         barcodeBufferRef.current = "";
       }
       lastKeyTimeRef.current = currentTime;
@@ -659,36 +659,45 @@ export default function PosPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && search.trim() !== '') {
-                    const exactBarcode = products.find((p: any) => p.barcode === search);
-                    if (exactBarcode) {
-                      if (Number(exactBarcode.stock) > 0) {
-                        addToCart(exactBarcode);
-                        playBeep();
-                        setSearch("");
+                  if (e.key === 'Enter') {
+                    const val = e.currentTarget.value.trim();
+                    if (val !== '') {
+                      const exactBarcode = products.find((p: any) => p.barcode === val);
+                      if (exactBarcode) {
+                        if (Number(exactBarcode.stock) > 0) {
+                          addToCart(exactBarcode);
+                          playBeep();
+                          setSearch("");
+                        } else {
+                          toast.error("Stok habis!");
+                          playError();
+                        }
+                        return;
+                      }
+                      
+                      const currentFiltered = products.filter((p: any) => 
+                        p.name?.toLowerCase().includes(val.toLowerCase()) || 
+                        p.barcode?.includes(val)
+                      );
+
+                      if (currentFiltered.length === 1) {
+                        const p = currentFiltered[0];
+                        if (Number(p.stock) > 0) {
+                          addToCart(p);
+                          playBeep();
+                          setSearch("");
+                        } else {
+                          toast.error("Stok habis!");
+                          playError();
+                        }
+                        return;
+                      }
+                      if (currentFiltered.length > 1) {
+                        toast.warning("Ada beberapa produk yang mirip. Silakan klik produk yang dimaksud.");
                       } else {
-                        toast.error("Stok habis!");
+                        toast.error("Produk tidak ditemukan!");
                         playError();
                       }
-                      return;
-                    }
-                    if (filteredProducts.length === 1) {
-                      const p = filteredProducts[0];
-                      if (Number(p.stock) > 0) {
-                        addToCart(p);
-                        playBeep();
-                        setSearch("");
-                      } else {
-                        toast.error("Stok habis!");
-                        playError();
-                      }
-                      return;
-                    }
-                    if (filteredProducts.length > 1) {
-                      toast.warning("Ada beberapa produk yang mirip. Silakan klik produk yang dimaksud.");
-                    } else {
-                      toast.error("Produk tidak ditemukan!");
-                      playError();
                     }
                   }
                 }}
