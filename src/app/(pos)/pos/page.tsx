@@ -212,7 +212,9 @@ export default function PosPage() {
       if (e.key === 'Enter') {
         const barcode = barcodeBufferRef.current;
         if (barcode.length >= 3) {
-          e.preventDefault(); // Mencegah tombol '+' ikut terklik secara tidak sengaja oleh tombol Enter dari scanner
+          e.preventDefault(); // Mencegah action bawaan browser
+          e.stopPropagation(); // Mencegah event turun ke element tombol di bawahnya (capture phase)
+          
           const exactProduct = productsRef.current.find((p: any) => p.barcode === barcode);
           if (exactProduct) {
             addToCart(exactProduct);
@@ -229,12 +231,16 @@ export default function PosPage() {
 
       // Hindari mendaftarkan tombol khusus (Shift, CapsLock, dll)
       if (e.key.length === 1) {
+        // Jika sedang scan, hilangkan fokus dari tombol apapun yang sedang aktif agar aman dari klik tidak sengaja
+        if (document.activeElement instanceof HTMLElement && !(document.activeElement instanceof HTMLInputElement) && !(document.activeElement instanceof HTMLTextAreaElement)) {
+          document.activeElement.blur();
+        }
         barcodeBufferRef.current += e.key;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [addToCart, playBeep, playError]);
 
   const filteredProducts = products.filter((p: any) => 
