@@ -1086,7 +1086,7 @@ export default function PosPage() {
                     <div className="relative flex-1">
                       <Input 
                         type="text"
-                        style={{ WebkitTextSecurity: 'disc' }}
+                        style={{ WebkitTextSecurity: 'disc' } as any}
                         autoComplete="off"
                         placeholder="Scan RFID..." 
                         className="font-mono uppercase text-sm pr-10 h-14 rounded-xl" 
