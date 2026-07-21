@@ -261,8 +261,13 @@ export default function PosPage() {
         
         if (foundSantri) {
           let saldo = 0;
+          let totalJajanHariIni = 0;
+          const limitJajan = Number(foundSantri.limit_jajan_harian || 0);
+
           if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
             const sNisClean = String(foundSantri.nis).replace(/^0+/, '');
+            const todayStr = new Date().toISOString().split('T')[0];
+            
             const foundTabunganRows = tabunganMasterData.filter((t: any) => 
               String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
             );
@@ -271,21 +276,41 @@ export default function PosPage() {
               const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
               return jenis === 'tarik' ? sum - nom : sum + nom;
             }, 0);
+
+            // Hitung jajan hari ini jika ada limit
+            if (limitJajan > 0) {
+              totalJajanHariIni = foundTabunganRows.reduce((sum: number, t: any) => {
+                const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+                const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+                const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
+                const tgl = String(rawDate).split('T')[0];
+                const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
+                
+                if (jenis === 'tarik' && tgl === todayStr && ket.includes('kantin')) {
+                  return sum + nom;
+                }
+                return sum;
+              }, 0);
+            }
           }
 
           setBuyerData({ nama: foundSantri.nama, saldo: saldo });
           setBuyerId(String(foundSantri.nis));
           
-          if (saldo >= getCartTotal()) {
-            // Saldo cukup, tampilkan modal PIN
+          if (saldo < getCartTotal()) {
+            playError();
+            showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
+          } else if (limitJajan > 0 && (totalJajanHariIni + getCartTotal() > limitJajan)) {
+            playError();
+            const sisaLimit = limitJajan - totalJajanHariIni;
+            showCheckoutAlert('error', 'MELEBIHI LIMIT JAJAN', `Sisa Limit Hari Ini: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}`, foundSantri.nama);
+          } else {
+            // Saldo dan Limit cukup, tampilkan modal PIN
             setPendingBuyer(foundSantri);
             setEnteredPin("");
             setPinModalOpen(true);
             setPaymentModalOpen(false); // Tutup modal pembayaran
             playDing();
-          } else {
-            playError();
-            showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
           }
         } else {
           toast.error("Santri tidak ditemukan di master data!");
