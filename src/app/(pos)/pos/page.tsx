@@ -212,6 +212,7 @@ export default function PosPage() {
       if (e.key === 'Enter') {
         const barcode = barcodeBufferRef.current;
         if (barcode.length >= 3) {
+          e.preventDefault(); // Mencegah tombol '+' ikut terklik secara tidak sengaja oleh tombol Enter dari scanner
           const exactProduct = productsRef.current.find((p: any) => p.barcode === barcode);
           if (exactProduct) {
             addToCart(exactProduct);
