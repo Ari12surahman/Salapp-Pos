@@ -40,7 +40,7 @@ export default function PosPage() {
   }, [queryClient]);
   
   const [buyerId, setBuyerId] = useState("");
-  const [buyerData, setBuyerData] = useState<{nama: string, saldo: number} | null>(null);
+  const [buyerData, setBuyerData] = useState<{nama: string, saldo: number, sisaLimit?: number | null} | null>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
@@ -294,7 +294,7 @@ export default function PosPage() {
             }
           }
 
-          setBuyerData({ nama: foundSantri.nama, saldo: saldo });
+          setBuyerData({ nama: foundSantri.nama, saldo: saldo, sisaLimit: limitJajan > 0 ? (limitJajan - totalJajanHariIni) : null });
           setBuyerId(String(foundSantri.nis));
           
           if (saldo < getCartTotal()) {
@@ -304,6 +304,8 @@ export default function PosPage() {
             playError();
             const sisaLimit = limitJajan - totalJajanHariIni;
             showCheckoutAlert('error', 'MELEBIHI LIMIT JAJAN', `Sisa Limit Hari Ini: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}`, foundSantri.nama);
+            setPendingBuyer(null);
+            setPinModalOpen(false);
           } else {
             // Saldo dan Limit cukup, tampilkan modal PIN
             setPendingBuyer(foundSantri);
@@ -1160,11 +1162,17 @@ export default function PosPage() {
                   </div>
 
                   {buyerData ? (
-                    <div className={`p-4 rounded-xl border-2 font-mono ${buyerData.saldo >= getCartTotal() ? 'bg-green-100 text-green-800 border-green-500 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 border-red-500 dark:bg-red-900/30 dark:text-red-400'}`}>
+                    <div className={`p-4 rounded-xl border-2 font-mono ${(buyerData.saldo >= getCartTotal() && (buyerData.sisaLimit === null || buyerData.sisaLimit === undefined || buyerData.sisaLimit >= getCartTotal())) ? 'bg-green-100 text-green-800 border-green-500 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 border-red-500 dark:bg-red-900/30 dark:text-red-400'}`}>
                       <p className="text-sm uppercase font-bold">{buyerData.nama}</p>
                       <p className="text-xl font-black mt-1">Saldo: Rp {buyerData.saldo.toLocaleString('id-ID')}</p>
+                      {buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && (
+                        <p className="text-sm font-bold mt-1 text-slate-600">Sisa Limit Jajan: Rp {(buyerData.sisaLimit > 0 ? buyerData.sisaLimit : 0).toLocaleString('id-ID')}</p>
+                      )}
                       {buyerData.saldo < getCartTotal() && (
                         <p className="text-sm mt-2 font-bold text-red-600">SALDO TIDAK MENCUKUPI!</p>
+                      )}
+                      {(buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit < getCartTotal()) && (
+                        <p className="text-sm mt-2 font-bold text-red-600">MELEBIHI LIMIT JAJAN HARIAN!</p>
                       )}
                     </div>
                   ) : (
@@ -1179,7 +1187,7 @@ export default function PosPage() {
 
                   <Button 
                     className="h-16 text-xl font-bold bg-green-600 hover:bg-green-700 text-white mt-2"
-                    disabled={!buyerData || buyerData.saldo < getCartTotal() || isProcessing}
+                    disabled={!buyerData || buyerData.saldo < getCartTotal() || (buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit < getCartTotal()) || isProcessing}
                     onClick={() => {
                       processCheckout('Tabungan');
                       setPaymentModalOpen(false);
