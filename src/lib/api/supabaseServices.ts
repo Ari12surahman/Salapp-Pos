@@ -61,7 +61,7 @@ export const supabaseServices = {
   },
 
   getTransaksi: async () => {
-    const { data, error } = await supabase.from('Transaksi').select('*');
+    const { data, error } = await supabase.from('Transaksi').select('*').order('Waktu', { ascending: false });
     if (error) return { status: 'error', message: error.message };
     return { status: 'success', data: mapKeysToLower(data) };
   },

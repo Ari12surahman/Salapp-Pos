@@ -43,7 +43,7 @@ export default function LaporanPage() {
             const wId = trx.warungid || trx.WarungID;
             return !userState?.warungId || userState.warungId === 'ALL' || wId === userState.warungId;
           });
-          setData(filtered.reverse());
+          setData(filtered);
         }
       })
       .catch(() => {
