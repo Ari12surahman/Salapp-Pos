@@ -19,6 +19,23 @@ import { useSyncStore } from "@/store/useSyncStore";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/lib/supabase";
 
+export const getBankDisplayName = (method: string) => {
+  const map: Record<string, string> = {
+    bri_va: 'BRI Virtual Account',
+    bni_va: 'BNI Virtual Account',
+    bsi_va: 'BSI Virtual Account',
+    cimb_niaga_va: 'CIMB Niaga VA',
+    danamon_va: 'Danamon VA',
+    muamalat_va: 'Muamalat VA',
+    ocbc_va: 'OCBC VA',
+    maybank_va: 'Maybank VA',
+    bnc_va: 'Bank Neo Commerce (BNC)',
+    qris: 'QRIS',
+    payment_link: 'Payment Link'
+  };
+  return map[method] || method.replace('_va', ' VA').toUpperCase();
+};
+
 export default function PosPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -492,6 +509,13 @@ export default function PosPage() {
       // Unique Order ID
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
+
+      // Validasi batas minimal Virtual Account Pakasir (Min Rp 10.000)
+      if (type !== 'qris' && amount < 10000) {
+        toast.error("Pembayaran Virtual Account minimal Rp 10.000. Untuk total di bawah Rp 10.000 silakan pilih QRIS.");
+        setPakasirData(prev => ({ ...prev, loading: false }));
+        return;
+      }
       
       const dbPayload = {
         orderId,
@@ -521,10 +545,10 @@ export default function PosPage() {
       }).then(r => r.json());
       const res = typeof response === 'string' ? JSON.parse(response) : response;
 
-      if (res?.status === 'success' || res?.checkout_url || (res?.data && (res?.data?.status === 'success' || res?.data?.payment_number)) || res?.payment || res?.payment_number) {
+      if (res?.status === 'success' || res?.checkout_url || (res?.data && (res?.data?.status === 'success' || res?.data?.payment_number || res?.data?.va_number)) || res?.payment || res?.payment_number || res?.va_number || res?.payment_link) {
         const paymentData = res?.payment || res?.data || res;
-        const checkoutUrl = paymentData.checkout_url || paymentData.url;
-        const qrString = paymentData.payment_number || paymentData.qr_string || null;
+        const checkoutUrl = paymentData.checkout_url || paymentData.url || paymentData.payment_link;
+        const qrString = paymentData.va_number || paymentData.payment_number || paymentData.qr_string || null;
         
         // Detect sandbox mode from the QR string response or VA dummy number
         const isSandboxServer = qrString && (qrString.toUpperCase().includes('SANDBOX') || qrString === '123123123');
@@ -1099,15 +1123,15 @@ export default function PosPage() {
                   </div>
                   
                   {[
-                    { id: 'bni_va', name: 'BNI VA', color: 'text-orange-600' },
-                    { id: 'bri_va', name: 'BRI VA', color: 'text-blue-700' },
+                    { id: 'bri_va', name: 'BRI Virtual Account', color: 'text-blue-700' },
+                    { id: 'bni_va', name: 'BNI Virtual Account', color: 'text-orange-600' },
+                    { id: 'bsi_va', name: 'BSI Virtual Account', color: 'text-emerald-600' },
                     { id: 'cimb_niaga_va', name: 'CIMB Niaga VA', color: 'text-red-600' },
-                    { id: 'permata_va', name: 'Permata VA', color: 'text-emerald-600' },
-                    { id: 'sampoerna_va', name: 'Sahabat Sampoerna VA', color: 'text-red-500' },
-                    { id: 'bnc_va', name: 'BNC VA', color: 'text-yellow-500' },
+                    { id: 'danamon_va', name: 'Danamon VA', color: 'text-amber-600' },
+                    { id: 'muamalat_va', name: 'Muamalat VA', color: 'text-purple-600' },
+                    { id: 'ocbc_va', name: 'OCBC VA', color: 'text-rose-600' },
                     { id: 'maybank_va', name: 'Maybank VA', color: 'text-yellow-600' },
-                    { id: 'atm_bersama_va', name: 'ATM Bersama VA', color: 'text-blue-500' },
-                    { id: 'artha_graha_va', name: 'Artha Graha VA', color: 'text-blue-800' }
+                    { id: 'bnc_va', name: 'Bank Neo Commerce (BNC)', color: 'text-slate-600' }
                   ].map((bank) => (
                     <Button 
                       key={bank.id}
@@ -1331,7 +1355,7 @@ export default function PosPage() {
 
               {pakasirData.step === 'SHOW_VA' && (
                 <div className="flex flex-col items-center gap-4 text-center">
-                  <p className="font-bold uppercase tracking-widest">{paymentMethod} GENERATED</p>
+                  <p className="font-bold uppercase tracking-widest">{getBankDisplayName(paymentMethod)} GENERATED</p>
                   
                   {pakasirTimeLeft > 0 ? (
                     <>
@@ -1344,7 +1368,7 @@ export default function PosPage() {
 
                       {pakasirData.qrString && (
                         <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
-                          <p className="text-xs font-semibold text-steel uppercase mb-1">Nomor Virtual Account</p>
+                          <p className="text-xs font-semibold text-steel uppercase mb-1">{getBankDisplayName(paymentMethod)}</p>
                           <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
                         </div>
                       )}
