@@ -337,25 +337,69 @@ export const supabaseServices = {
   },
 
   simpanTransaksiOffline: async (payload: any) => {
-    // Validasi Limit Jajan Harian untuk Tabungan
+    // Validasi Limit Tabungan (Harian, Mingguan, Bulanan)
     if (payload.method === 'Tabungan' && payload.santriId) {
-      const { data: santri } = await supabase.from('Data Santri').select('limit_jajan_harian').eq('nis', payload.santriId).single();
-      const limitJajan = Number(santri?.limit_jajan_harian || 0);
+      const [{ data: santri }, { data: configRow }] = await Promise.all([
+        supabase.from('Data Santri').select('limit_jajan_harian, nama').eq('nis', payload.santriId).maybeSingle(),
+        supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle()
+      ]);
 
-      if (limitJajan > 0) {
-        const todayStr = new Date().toISOString().split('T')[0];
+      let limitConfig: any = null;
+      try {
+        if (configRow?.nilai) limitConfig = JSON.parse(configRow.nilai);
+      } catch (e) {}
+
+      const sNis = String(payload.santriId);
+      const sNisClean = sNis.replace(/^0+/, '');
+      const override = limitConfig?.santriLimits?.[sNis] || limitConfig?.santriLimits?.[sNisClean];
+
+      let limit = 0;
+      let periode = 'harian';
+
+      if (override && override.limit !== undefined) {
+        limit = Number(override.limit);
+        periode = override.periode || 'harian';
+      } else if (limitConfig?.defaultLimit !== undefined) {
+        limit = Number(limitConfig.defaultLimit);
+        periode = limitConfig.defaultPeriode || 'harian';
+      } else {
+        limit = Number(santri?.limit_jajan_harian || 0);
+        periode = 'harian';
+      }
+
+      if (limit > 0) {
+        const now = new Date();
+        let startDateStr = now.toISOString().split('T')[0];
+        let periodeLabel = 'Harian';
+
+        if (periode === 'mingguan') {
+          periodeLabel = 'Mingguan';
+          const d = new Date(now);
+          const day = d.getDay();
+          const diff = (day === 0 ? -6 : 1) - day;
+          d.setDate(d.getDate() + diff);
+          startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } else if (periode === 'bulanan') {
+          periodeLabel = 'Bulanan';
+          startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        }
+
         const { data: tabungan } = await supabase
           .from('Tabungan')
-          .select('nominal')
+          .select('nominal, tanggal')
           .eq('nis', payload.santriId)
           .eq('jenis', 'Tarik')
-          .eq('tanggal', todayStr)
+          .gte('tanggal', startDateStr)
           .ilike('keterangan', '%kantin%');
 
-        const totalJajanHariIni = (tabungan || []).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+        const totalJajanPeriod = (tabungan || []).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
 
-        if (totalJajanHariIni + payload.total > limitJajan) {
-          return { status: 'error', message: `Transaksi ditolak: Melebihi limit jajan harian. Sisa limit: Rp ${(limitJajan - totalJajanHariIni > 0 ? limitJajan - totalJajanHariIni : 0).toLocaleString('id-ID')}` };
+        if (totalJajanPeriod + payload.total > limit) {
+          const sisa = limit - totalJajanPeriod;
+          return { 
+            status: 'error', 
+            message: `Transaksi ditolak: Melebihi limit tabungan ${periodeLabel.toLowerCase()}. Sisa limit: Rp ${(sisa > 0 ? sisa : 0).toLocaleString('id-ID')}` 
+          };
         }
       }
     }

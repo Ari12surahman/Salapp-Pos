@@ -57,7 +57,7 @@ export default function PosPage() {
   }, [queryClient]);
   
   const [buyerId, setBuyerId] = useState("");
-  const [buyerData, setBuyerData] = useState<{nama: string, saldo: number, sisaLimit?: number | null} | null>(null);
+  const [buyerData, setBuyerData] = useState<{nama: string, saldo: number, sisaLimit?: number | null, periodeLabel?: string} | null>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
@@ -78,6 +78,20 @@ export default function PosPage() {
   const { data: tabunganMasterData, refetch: refetchTabungan, isFetching: isFetchingTabungan } = useQuery({
     queryKey: ['tabunganMaster'],
     queryFn: () => api.get('getTabungan').then(res => res.data),
+  });
+
+  const { data: limitConfigData } = useQuery({
+    queryKey: ['tabunganLimitConfig'],
+    queryFn: async () => {
+      const { data } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+      if (!data?.nilai) return null;
+      try {
+        return JSON.parse(data.nilai);
+      } catch (e) {
+        return null;
+      }
+    },
+    staleTime: 60 * 1000,
   });
 
   const { pendingQueue, removePending } = useSyncStore();
@@ -278,13 +292,44 @@ export default function PosPage() {
         
         if (foundSantri) {
           let saldo = 0;
-          let totalJajanHariIni = 0;
-          const limitJajan = Number(foundSantri.limit_jajan_harian || 0);
+          let totalJajanPeriod = 0;
+
+          // Ambil konfigurasi limit santri (override santri -> default -> fallback limit_jajan_harian)
+          const sNis = String(foundSantri.nis);
+          const sNisClean = sNis.replace(/^0+/, '');
+          const override = limitConfigData?.santriLimits?.[sNis] || limitConfigData?.santriLimits?.[sNisClean];
+
+          let limitJajan = 0;
+          let periode = 'harian';
+
+          if (override && override.limit !== undefined) {
+            limitJajan = Number(override.limit);
+            periode = override.periode || 'harian';
+          } else if (limitConfigData?.defaultLimit !== undefined) {
+            limitJajan = Number(limitConfigData.defaultLimit);
+            periode = limitConfigData.defaultPeriode || 'harian';
+          } else {
+            limitJajan = Number(foundSantri.limit_jajan_harian || 0);
+            periode = 'harian';
+          }
+
+          const now = new Date();
+          let startDateStr = now.toISOString().split('T')[0];
+          let periodeLabel = 'Hari Ini';
+
+          if (periode === 'mingguan') {
+            periodeLabel = 'Minggu Ini';
+            const d = new Date(now);
+            const day = d.getDay();
+            const diff = (day === 0 ? -6 : 1) - day;
+            d.setDate(d.getDate() + diff);
+            startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } else if (periode === 'bulanan') {
+            periodeLabel = 'Bulan Ini';
+            startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+          }
 
           if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
-            const sNisClean = String(foundSantri.nis).replace(/^0+/, '');
-            const todayStr = new Date().toISOString().split('T')[0];
-            
             const foundTabunganRows = tabunganMasterData.filter((t: any) => 
               String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
             );
@@ -294,16 +339,16 @@ export default function PosPage() {
               return jenis === 'tarik' ? sum - nom : sum + nom;
             }, 0);
 
-            // Hitung jajan hari ini jika ada limit
+            // Hitung jajan pada periode berjalan jika ada limit
             if (limitJajan > 0) {
-              totalJajanHariIni = foundTabunganRows.reduce((sum: number, t: any) => {
+              totalJajanPeriod = foundTabunganRows.reduce((sum: number, t: any) => {
                 const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
                 const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
                 const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
                 const tgl = String(rawDate).split('T')[0];
                 const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
                 
-                if (jenis === 'tarik' && tgl === todayStr && ket.includes('kantin')) {
+                if (jenis === 'tarik' && tgl >= startDateStr && ket.includes('kantin')) {
                   return sum + nom;
                 }
                 return sum;
@@ -311,16 +356,21 @@ export default function PosPage() {
             }
           }
 
-          setBuyerData({ nama: foundSantri.nama, saldo: saldo, sisaLimit: limitJajan > 0 ? (limitJajan - totalJajanHariIni) : null });
+          setBuyerData({ 
+            nama: foundSantri.nama, 
+            saldo: saldo, 
+            sisaLimit: limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null,
+            periodeLabel: periodeLabel
+          });
           setBuyerId(String(foundSantri.nis));
           
           if (saldo < getCartTotal()) {
             playError();
             showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
-          } else if (limitJajan > 0 && (totalJajanHariIni + getCartTotal() > limitJajan)) {
+          } else if (limitJajan > 0 && (totalJajanPeriod + getCartTotal() > limitJajan)) {
             playError();
-            const sisaLimit = limitJajan - totalJajanHariIni;
-            showCheckoutAlert('error', 'MELEBIHI LIMIT JAJAN', `Sisa Limit Hari Ini: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}`, foundSantri.nama);
+            const sisaLimit = limitJajan - totalJajanPeriod;
+            showCheckoutAlert('error', 'MELEBIHI LIMIT TABUNGAN', `Sisa Limit ${periodeLabel}: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}`, foundSantri.nama);
             setPendingBuyer(null);
             setPinModalOpen(false);
           } else {
@@ -1190,13 +1240,13 @@ export default function PosPage() {
                       <p className="text-sm uppercase font-bold">{buyerData.nama}</p>
                       <p className="text-xl font-black mt-1">Saldo: Rp {buyerData.saldo.toLocaleString('id-ID')}</p>
                       {buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && (
-                        <p className="text-sm font-bold mt-1 text-slate-600">Sisa Limit Jajan: Rp {(buyerData.sisaLimit > 0 ? buyerData.sisaLimit : 0).toLocaleString('id-ID')}</p>
+                        <p className="text-sm font-bold mt-1 text-slate-600">Sisa Limit ({buyerData.periodeLabel || 'Hari Ini'}): Rp {(buyerData.sisaLimit > 0 ? buyerData.sisaLimit : 0).toLocaleString('id-ID')}</p>
                       )}
                       {buyerData.saldo < getCartTotal() && (
                         <p className="text-sm mt-2 font-bold text-red-600">SALDO TIDAK MENCUKUPI!</p>
                       )}
                       {(buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit < getCartTotal()) && (
-                        <p className="text-sm mt-2 font-bold text-red-600">MELEBIHI LIMIT JAJAN HARIAN!</p>
+                        <p className="text-sm mt-2 font-bold text-red-600">MELEBIHI LIMIT TABUNGAN ({buyerData.periodeLabel ? buyerData.periodeLabel.toUpperCase() : 'HARI INI'})!</p>
                       )}
                     </div>
                   ) : (
