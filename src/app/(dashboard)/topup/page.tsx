@@ -31,7 +31,11 @@ export default function TopupPage() {
             const foundTabunganRows = resTabungan.data.filter((t: any) => 
               String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
             );
-            saldo = foundTabunganRows.reduce((sum: number, t: any) => sum + Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0), 0);
+            saldo = foundTabunganRows.reduce((sum: number, t: any) => {
+              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+              return (jenis === 'tarik' || jenis === 'keluar') ? sum - nom : sum + nom;
+            }, 0);
           }
           setSantriData({ nama: foundSantri.nama, saldo: saldo });
         } else {

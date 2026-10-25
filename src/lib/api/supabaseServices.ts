@@ -336,6 +336,43 @@ export const supabaseServices = {
     return { status: 'success' };
   },
 
+  topupSaldo: async (payload: { nis: string; amount: number }) => {
+    if (!payload.nis || !payload.amount) {
+      return { status: "error", message: "NIS dan nominal topup wajib diisi" };
+    }
+    const cleanNis = String(payload.nis).trim().replace(/^0+/, '');
+    const { data: santri } = await supabase
+      .from('Data Santri')
+      .select('nama, nis')
+      .or(`nis.eq.${payload.nis},uid.eq.${payload.nis}`)
+      .maybeSingle();
+
+    const targetNis = santri?.nis || payload.nis;
+    const targetNama = santri?.nama || 'Santri';
+
+    const { error } = await supabase.from('Tabungan').insert({
+      id: `TB-${new Date().getTime()}`,
+      tanggal: new Date().toISOString().split('T')[0],
+      nis: targetNis,
+      nama: targetNama,
+      jenis: 'Setor',
+      nominal: Number(payload.amount),
+      keterangan: 'Top Up Saldo POS Kasir'
+    });
+
+    if (error) return { status: 'error', message: error.message };
+
+    // Hitung saldo terbaru
+    const { data: allTab } = await supabase.from('Tabungan').select('jenis, nominal').eq('nis', targetNis);
+    const newSaldo = (allTab || []).reduce((sum, t) => {
+      const nom = Number(t.nominal || 0);
+      const j = String(t.jenis || '').toLowerCase();
+      return (j === 'tarik' || j === 'keluar') ? sum - nom : sum + nom;
+    }, 0);
+
+    return { status: "success", message: "Topup berhasil", newSaldo };
+  },
+
   simpanTransaksiOffline: async (payload: any) => {
     // Validasi Limit Tabungan (Harian, Mingguan, Bulanan)
     if (payload.method === 'Tabungan' && payload.santriId) {
