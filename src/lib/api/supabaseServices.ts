@@ -466,7 +466,7 @@ export const supabaseServices = {
         nama: payload.buyerName || 'Santri',
         jenis: 'Tarik',
         nominal: payload.total,
-        keterangan: 'Belanja Kantin (POS)'
+        keterangan: `Belanja Kantin (POS) [${trxId}]`
       });
     }
 
