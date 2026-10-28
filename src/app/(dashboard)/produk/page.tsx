@@ -40,8 +40,18 @@ export default function ProdukPage() {
     id: "", nama: "", warungId: ""
   });
 
+  const userWarungId = user?.warungId || (user as any)?.warungid;
+
   const resetForm = () => {
-    setFormData({ nama: "", kategori: "", modal: 0, jual: 0, stok: 0, barcode: "", warungId: user?.warungId && user.warungId !== 'ALL' ? user.warungId : "" });
+    setFormData({ 
+      nama: "", 
+      kategori: "", 
+      modal: 0, 
+      jual: 0, 
+      stok: 0, 
+      barcode: "", 
+      warungId: userWarungId && userWarungId !== 'ALL' ? userWarungId : "" 
+    });
     setIsEdit(false);
     setEditId(null);
   };
@@ -68,12 +78,15 @@ export default function ProdukPage() {
 
   const handleEditClick = (item: any) => {
     setFormData({
-      nama: item.nama || "", kategori: item.kategori || "", 
-      modal: item.modal || 0, jual: item.jual || 0, 
-      stok: item.stok || 0, barcode: item.barcode || "",
-      warungId: item.warungid || item.WarungID || ""
+      nama: item.nama || item.Nama || "", 
+      kategori: item.kategori || item.Kategori || "", 
+      modal: item.modal !== undefined ? item.modal : (item.hargamodal || item.HargaModal || 0), 
+      jual: item.jual !== undefined ? item.jual : (item.hargajual || item.HargaJual || 0), 
+      stok: item.stok !== undefined ? item.stok : (item.Stok || 0), 
+      barcode: item.barcode || item.Barcode || "",
+      warungId: item.warungid || item.WarungID || item.warungId || ""
     });
-    setEditId(item.id);
+    setEditId(item.id || item.ID);
     setIsEdit(true);
     setIsModalOpen(true);
   };
@@ -81,12 +94,19 @@ export default function ProdukPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const res = await api.get('getProduk');
+      const userWarung = user?.warungId || (user as any)?.warungid;
+      const res = await api.get('getProduk', { warungId: userWarung });
       if (res?.data) {
         const mapped = res.data.map((p: any) => ({
           ...p,
-          modal: p.hargamodal !== undefined ? p.hargamodal : p.modal,
-          jual: p.hargajual !== undefined ? p.hargajual : p.jual
+          id: p.id || p.ID,
+          warungid: p.warungid || p.WarungID || p.warungId,
+          nama: p.nama || p.Nama || "",
+          kategori: p.kategori || p.Kategori || "",
+          modal: Number(p.hargamodal !== undefined ? p.hargamodal : (p.modal !== undefined ? p.modal : (p.HargaModal || 0))),
+          jual: Number(p.hargajual !== undefined ? p.hargajual : (p.jual !== undefined ? p.jual : (p.HargaJual || 0))),
+          stok: Number(p.stok !== undefined ? p.stok : (p.Stok || 0)),
+          barcode: p.barcode ? String(p.barcode) : (p.Barcode ? String(p.Barcode) : "")
         }));
         setData(mapped);
       }
@@ -101,11 +121,7 @@ export default function ProdukPage() {
         setKategoriData(resK.data);
       }
     } catch (err) {
-      // Fallback for visual testing if DB is empty/failing
-      setData([
-        { id: "P001", warungId: "WR001", nama: "Nasi Kuning Telur", kategori: "Makanan", modal: 7000, jual: 10000, stok: 50, barcode: "1111", status: "Aktif" },
-        { id: "P002", warungId: "WR002", nama: "Es Teh Manis", kategori: "Minuman", modal: 1500, jual: 3000, stok: 100, barcode: "2222", status: "Aktif" }
-      ]);
+      console.error("fetchProducts error:", err);
     } finally {
       setLoading(false);
     }
@@ -156,11 +172,21 @@ export default function ProdukPage() {
     setIsSubmitting(true);
     try {
       const endpoint = isEdit ? 'editProduk' : 'tambahProduk';
+      const userWarung = user?.warungId || (user as any)?.warungid;
+      const effectiveWarungId = formData.warungId || (userWarung && userWarung !== 'ALL' ? userWarung : "");
+
+      if (!effectiveWarungId) {
+        toast.error("Silakan pilih Cabang / Warung terlebih dahulu!");
+        setIsSubmitting(false);
+        return;
+      }
+
       const basePayload = { 
         ...formData, 
-        hargaModal: Number(formData.modal), 
-        hargaJual: Number(formData.jual),
-        stok: Number(formData.stok)
+        warungId: effectiveWarungId,
+        hargaModal: Number(formData.modal || 0), 
+        hargaJual: Number(formData.jual || 0),
+        stok: Number(formData.stok || 0)
       };
       const payload = isEdit ? { ...basePayload, id: editId } : basePayload;
       const res = await api.post(endpoint, payload);
@@ -169,6 +195,7 @@ export default function ProdukPage() {
       toast.success(isEdit ? "Produk Berhasil Diubah!" : "Produk Berhasil Ditambahkan!");
       setIsModalOpen(false);
       resetForm();
+      setCurrentPage(1);
       queryClient.invalidateQueries({ queryKey: ['products'] });
       await fetchProducts();
     } catch (error: any) {
@@ -221,8 +248,14 @@ export default function ProdukPage() {
   }, []);
 
   const filteredData = data.filter(p => {
-    const matchesSearch = p.nama.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search);
-    const matchesWarung = !user?.warungId || user.warungId === 'ALL' || p.warungid === user.warungId || p.WarungID === user.warungId || p.warungId === user.warungId;
+    const nama = String(p.nama || p.Nama || "").toLowerCase();
+    const barcode = String(p.barcode || p.Barcode || "").toLowerCase();
+    const searchLower = search.toLowerCase();
+    const matchesSearch = nama.includes(searchLower) || barcode.includes(searchLower);
+    
+    const userWarung = user?.warungId || (user as any)?.warungid;
+    const pWarung = String(p.warungid || p.WarungID || p.warungId || "");
+    const matchesWarung = !userWarung || userWarung === 'ALL' || pWarung === userWarung;
     return matchesSearch && matchesWarung;
   });
 
@@ -393,7 +426,7 @@ export default function ProdukPage() {
                     value={formData.warungId} 
                     onChange={handleInputChange} 
                     required
-                    disabled={!!(user?.warungId && user.warungId !== 'ALL')}
+                    disabled={!!(userWarungId && userWarungId !== 'ALL')}
                     className="flex h-12 w-full border-2 border-border bg-background px-3 py-2 text-sm uppercase ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">-- Pilih Warung --</option>
@@ -440,7 +473,7 @@ export default function ProdukPage() {
               <div className="flex justify-end gap-2 mt-6">
                 <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); resetForm(); }}>BATAL</Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "MENYIMPAN..." : "SIMPAN"}
+                  {isSubmitting ? "MENYIMPAN..." : (isEdit ? "SIMPAN PERUBAHAN" : "TAMBAH PRODUK")}
                 </Button>
               </div>
             </form>

@@ -30,10 +30,41 @@ export const supabaseServices = {
     return { status: 'success', data: mapKeysToLower(data) };
   },
   
-  getProduk: async () => {
-    const { data, error } = await supabase.from('Produk').select('*');
-    if (error) return { status: 'error', message: error.message };
-    return { status: 'success', data: mapKeysToLower(data) };
+  getProduk: async (param?: any) => {
+    const warungId = typeof param === 'string' ? param : (param?.warungId || undefined);
+
+    // If a specific warung is requested (and not ALL), query that warung directly
+    if (warungId && warungId !== 'ALL') {
+      const { data, error } = await supabase
+        .from('Produk')
+        .select('*')
+        .eq('WarungID', warungId)
+        .order('ID', { ascending: false });
+      if (error) return { status: 'error', message: error.message };
+      return { status: 'success', data: mapKeysToLower(data || []) };
+    }
+
+    // For ALL or no warungId, fetch in chunks to bypass Supabase 1000-row limit
+    let allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('Produk')
+        .select('*')
+        .order('ID', { ascending: false })
+        .range(from, from + step - 1);
+      
+      if (error) {
+        if (allData.length > 0) break;
+        return { status: 'error', message: error.message };
+      }
+      if (!data || data.length === 0) break;
+      allData.push(...data);
+      if (data.length < step) break;
+      from += step;
+    }
+    return { status: 'success', data: mapKeysToLower(allData) };
   },
 
   getKategori: async () => {
@@ -205,21 +236,32 @@ export const supabaseServices = {
   },
 
   tambahProduk: async (payload: any) => {
-    const newId = "P" + new Date().getTime();
+    const newId = "P" + Date.now();
     const { error } = await supabase.from('Produk').insert({
-      ID: newId, WarungID: payload.warungId, Nama: payload.nama, Kategori: payload.kategori,
-      HargaModal: payload.hargaModal, HargaJual: payload.hargaJual, Stok: payload.stok,
-      Barcode: payload.barcode || "", Status: payload.status || "Aktif"
+      ID: newId,
+      WarungID: payload.warungId,
+      Nama: payload.nama,
+      Kategori: payload.kategori || "",
+      HargaModal: Number(payload.hargaModal || 0),
+      HargaJual: Number(payload.hargaJual || 0),
+      Stok: Number(payload.stok || 0),
+      Barcode: payload.barcode || "",
+      Status: payload.status || "Aktif"
     });
     if (error) return { status: 'error', message: error.message };
-    return { status: 'success' };
+    return { status: 'success', id: newId };
   },
 
   editProduk: async (payload: any) => {
     const { error } = await supabase.from('Produk').update({
-      WarungID: payload.warungId, Nama: payload.nama, Kategori: payload.kategori,
-      HargaModal: payload.hargaModal, HargaJual: payload.hargaJual, Stok: payload.stok,
-      Barcode: payload.barcode || "", Status: payload.status || "Aktif"
+      WarungID: payload.warungId,
+      Nama: payload.nama,
+      Kategori: payload.kategori || "",
+      HargaModal: Number(payload.hargaModal || 0),
+      HargaJual: Number(payload.hargaJual || 0),
+      Stok: Number(payload.stok || 0),
+      Barcode: payload.barcode || "",
+      Status: payload.status || "Aktif"
     }).eq('ID', payload.id);
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };

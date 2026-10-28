@@ -194,9 +194,10 @@ export default function PosPage() {
   };
   const [search, setSearch] = useState("");
 
+  const userWarungId = user?.warungId || (user as any)?.warungid;
   const { data: products = [], isLoading: loadingProducts, refetch: refetchProducts, isFetching: isFetchingProducts } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => api.get('getProduk').then(res => {
+    queryKey: ['products', userWarungId],
+    queryFn: () => api.get('getProduk', { warungId: userWarungId }).then(res => {
       if (res?.data) {
         return res.data
           .filter((p: any) => !user?.warungId || user.warungId === 'ALL' || p.warungid === user.warungId || p.WarungID === user.warungId)

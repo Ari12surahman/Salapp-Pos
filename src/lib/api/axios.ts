@@ -4,7 +4,8 @@ export const api = {
   get: async (action: string, params: Record<string, any> = {}) => {
     // Route POS actions to Supabase
     if (action in supabaseServices) {
-      return await (supabaseServices as any)[action](params.warungId);
+      const warungId = params?.warungId || params?.params?.warungId;
+      return await (supabaseServices as any)[action](warungId !== undefined ? warungId : params);
     }
     throw new Error(`Action ${action} not found in supabaseServices`);
   },
