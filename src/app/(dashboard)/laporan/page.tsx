@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from 'sonner';
-import { Download, FileText, Loader2, Trash2 } from "lucide-react";
+import { Download, FileText, Loader2, Trash2, Receipt, Printer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
 import { useAuthStore } from "@/store/authStore";
@@ -21,6 +21,38 @@ export default function LaporanPage() {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Struk States & Warung List
+  const [warungs, setWarungs] = useState<any[]>([]);
+  const [selectedStruk, setSelectedStruk] = useState<any | null>(null);
+  const [loadingStruk, setLoadingStruk] = useState(false);
+
+  const handleOpenStruk = async (item: any, meta: any) => {
+    const warungObj = warungs.find((w: any) => String(w.id || w.ID) === String(meta.warungId));
+    const warungName = warungObj?.nama || user?.warungName || "KANTIN PONDOK";
+
+    setSelectedStruk({
+      trxId: meta.trxId,
+      waktu: meta.waktu,
+      pembeli: meta.pembeli,
+      total: meta.total,
+      metode: meta.metode || "Tunai",
+      warungName,
+      items: []
+    });
+    setLoadingStruk(true);
+
+    try {
+      const res = await api.post('getDetailTransaksi', { trxId: meta.trxId });
+      if (res?.data && Array.isArray(res.data)) {
+        setSelectedStruk((prev: any) => prev ? { ...prev, items: res.data } : null);
+      }
+    } catch (err) {
+      console.error("Gagal memuat detail transaksi", err);
+    } finally {
+      setLoadingStruk(false);
+    }
+  };
   
   const getValGlobal = (item: any, keys: string[]) => {
     for (const k of keys) {
@@ -56,6 +88,9 @@ export default function LaporanPage() {
 
   useEffect(() => {
     fetchTransaksi();
+    api.get('getWarung').then(res => {
+      if (res?.data && Array.isArray(res.data)) setWarungs(res.data);
+    }).catch(() => {});
     const interval = setInterval(() => {
       fetchTransaksi(true);
     }, 10000); // 10s polling for realtime
@@ -398,7 +433,7 @@ export default function LaporanPage() {
                   <th className="p-3 uppercase tracking-wider">WAKTU</th>
                   <th className="p-3 uppercase tracking-wider">PEMBELI</th>
                   <th className="p-3 uppercase tracking-wider text-right">TOTAL</th>
-                  <th className="p-3 w-16 text-center print:hidden">AKSI</th>
+                  <th className="p-3 w-24 text-center print:hidden">AKSI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border print:divide-black">
@@ -418,6 +453,8 @@ export default function LaporanPage() {
                   const waktu = getVal(['waktu', 'tanggal', 'timestamp']) || "-";
                   const pembeli = getVal(['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST";
                   const total = getVal(['total', 'totalharga', 'harga', 'nominal']) || 0;
+                  const metode = getVal(['metode', 'method']) || "Tunai";
+                  const warungId = getVal(['warungid', 'warungId', 'warung']) || "";
 
                   return (
                     <tr key={`${trxId}-${idx}`} className="hover:bg-accent transition-colors print:hover:bg-transparent">
@@ -440,9 +477,26 @@ export default function LaporanPage() {
                         Rp {Number(total).toLocaleString('id-ID')}
                       </td>
                       <td className="p-3 text-center print:hidden">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete([trxId])}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" 
+                            title="Lihat & Cetak Struk" 
+                            onClick={() => handleOpenStruk(item, { trxId, waktu, pembeli, total, metode, warungId })}
+                          >
+                            <Receipt className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                            title="Hapus Transaksi" 
+                            onClick={() => handleDelete([trxId])}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -478,6 +532,227 @@ export default function LaporanPage() {
             </div>
           )}
         </div>
+      )}
+    
+      {/* MODAL LIHAT & CETAK STRUK TRANSAKSI */}
+      {selectedStruk && (
+        <>
+          <style dangerouslySetInnerHTML={{__html: `
+            @media print {
+              @page {
+                size: 58mm auto;
+                margin: 0;
+              }
+              body * {
+                visibility: hidden !important;
+              }
+              #struk-thermal-print, #struk-thermal-print * {
+                visibility: visible !important;
+              }
+              #struk-thermal-print {
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 58mm !important;
+                max-width: 58mm !important;
+                margin: 0 !important;
+                padding: 8px !important;
+                background: white !important;
+                color: black !important;
+                display: block !important;
+                z-index: 999999 !important;
+                font-family: monospace !important;
+                font-size: 11px !important;
+                line-height: 1.2 !important;
+              }
+            }
+          `}} />
+
+          {/* Modal Backdrop & Card Preview di Layar */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 print:hidden">
+            <div className="bg-card border-4 border-border w-full max-w-sm max-h-[90vh] flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]">
+              {/* Header Modal */}
+              <div className="bg-primary text-primary-foreground p-3.5 flex items-center justify-between border-b-4 border-border">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5" />
+                  <h2 className="text-base font-black uppercase tracking-tight">STRUK TRANSAKSI</h2>
+                </div>
+                <button 
+                  onClick={() => setSelectedStruk(null)}
+                  className="p-1 hover:bg-black/20 rounded transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Isi Struk (Tampilan Thermal) */}
+              <div className="p-4 sm:p-5 bg-white text-black flex justify-center border-b-4 border-border overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                <div className="font-mono text-xs w-full max-w-[58mm] mx-auto text-black">
+                  {/* Header Toko */}
+                  <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                    <h1 className="font-black text-sm uppercase">{selectedStruk.warungName}</h1>
+                    <p className="text-[10px] text-gray-700">Pondok Pesantren</p>
+                    <p className="text-[10px] text-gray-500">================================</p>
+                  </div>
+
+                  {/* Info Transaksi */}
+                  <div className="text-[10px] mb-2 flex justify-between leading-tight border-b border-dashed border-gray-300 pb-2">
+                    <div>
+                      <p className="font-bold">{selectedStruk.trxId}</p>
+                      <p className="text-gray-600">
+                        {selectedStruk.waktu !== "-" && new Date(selectedStruk.waktu).toString() !== "Invalid Date"
+                          ? new Date(selectedStruk.waktu).toLocaleString('id-ID')
+                          : selectedStruk.waktu}
+                      </p>
+                      <p className="text-gray-700">Pembeli: <span className="font-semibold uppercase">{selectedStruk.pembeli}</span></p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold">{selectedStruk.metode}</p>
+                      <p className="text-gray-600">Kasir: {user?.name || "Admin"}</p>
+                    </div>
+                  </div>
+
+                  {/* Loading Item */}
+                  {loadingStruk ? (
+                    <div className="py-6 flex flex-col items-center justify-center gap-2 text-gray-500">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="text-[10px]">Memuat rincian item...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Daftar Item Belanja */}
+                      <div className="border-b border-dashed border-black pb-2 mb-2">
+                        {selectedStruk.items && selectedStruk.items.length > 0 ? (
+                          selectedStruk.items.map((item: any, idx: number) => {
+                            const nama = item.namaproduk || item.NamaProduk || item.nama || "Item";
+                            const qty = Number(item.kuantitas || item.Kuantitas || item.qty || 1);
+                            const harga = Number(item.hargasatuan || item.HargaSatuan || item.harga || 0);
+                            const subtotal = Number(item.subtotal || item.Subtotal || (qty * harga));
+                            return (
+                              <div key={idx} className="mb-1.5 leading-tight">
+                                <p className="font-bold uppercase text-[11px]">{nama}</p>
+                                <div className="flex justify-between pl-2 text-[10px]">
+                                  <span>{qty} x {harga.toLocaleString('id-ID')}</span>
+                                  <span className="font-semibold">Rp {subtotal.toLocaleString('id-ID')}</span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="py-1 flex justify-between text-[11px]">
+                            <span>Total Belanja</span>
+                            <span className="font-semibold">Rp {Number(selectedStruk.total || 0).toLocaleString('id-ID')}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Total */}
+                      <div className="flex justify-between font-black text-sm mb-1 pt-1">
+                        <span>TOTAL</span>
+                        <span>Rp {Number(selectedStruk.total || 0).toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-600 mb-3">
+                        <span>Metode Bayar</span>
+                        <span className="font-bold uppercase">{selectedStruk.metode}</span>
+                      </div>
+
+                      {/* Footer Struk */}
+                      <div className="text-center text-[10px] text-gray-700 mt-4 border-t border-dashed border-gray-300 pt-2">
+                        <p>Terima kasih atas kunjungannya!</p>
+                        <p>Barang yang sudah dibeli tidak</p>
+                        <p>dapat ditukar / dikembalikan.</p>
+                        <p className="mt-2 font-bold text-gray-900">- SALAPP POS -</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Tombol Aksi */}
+              <div className="p-3 bg-muted/30 flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 font-bold text-xs" 
+                  onClick={() => setSelectedStruk(null)}
+                >
+                  TUTUP
+                </Button>
+                <Button 
+                  className="flex-1 gap-2 font-bold text-xs" 
+                  onClick={() => window.print()}
+                >
+                  <Printer className="w-4 h-4" /> CETAK STRUK
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Kontainer Cetak Struk (Khusus Print Thermal via Printer) */}
+          <div id="struk-thermal-print" className="hidden">
+            <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+              <h1 className="font-black text-sm uppercase">{selectedStruk.warungName}</h1>
+              <p className="text-[10px]">Pondok Pesantren</p>
+              <p className="text-[10px]">================================</p>
+            </div>
+
+            <div className="text-[10px] mb-2 flex justify-between leading-tight border-b border-dashed border-black pb-2">
+              <div>
+                <p className="font-bold">{selectedStruk.trxId}</p>
+                <p>
+                  {selectedStruk.waktu !== "-" && new Date(selectedStruk.waktu).toString() !== "Invalid Date"
+                    ? new Date(selectedStruk.waktu).toLocaleString('id-ID')
+                    : selectedStruk.waktu}
+                </p>
+                <p>Pembeli: {selectedStruk.pembeli}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-bold">{selectedStruk.metode}</p>
+                <p>Kasir: {user?.name || "Admin"}</p>
+              </div>
+            </div>
+
+            <div className="border-b border-dashed border-black pb-2 mb-2">
+              {selectedStruk.items && selectedStruk.items.length > 0 ? (
+                selectedStruk.items.map((item: any, idx: number) => {
+                  const nama = item.namaproduk || item.NamaProduk || item.nama || "Item";
+                  const qty = Number(item.kuantitas || item.Kuantitas || item.qty || 1);
+                  const harga = Number(item.hargasatuan || item.HargaSatuan || item.harga || 0);
+                  const subtotal = Number(item.subtotal || item.Subtotal || (qty * harga));
+                  return (
+                    <div key={idx} className="mb-1 leading-tight">
+                      <p className="font-bold uppercase text-[11px]">{nama}</p>
+                      <div className="flex justify-between pl-2 text-[10px]">
+                        <span>{qty} x {harga.toLocaleString('id-ID')}</span>
+                        <span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-1 flex justify-between text-[11px]">
+                  <span>Total Belanja</span>
+                  <span>Rp {Number(selectedStruk.total || 0).toLocaleString('id-ID')}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between font-black text-sm mb-1">
+              <span>TOTAL</span>
+              <span>Rp {Number(selectedStruk.total || 0).toLocaleString('id-ID')}</span>
+            </div>
+            <div className="flex justify-between text-[10px] mb-3">
+              <span>Metode</span>
+              <span className="font-bold uppercase">{selectedStruk.metode}</span>
+            </div>
+
+            <div className="text-center text-[10px] mt-4 border-t border-dashed border-black pt-2">
+              <p>Terima kasih atas kunjungannya!</p>
+              <p>Barang yang sudah dibeli tidak</p>
+              <p>dapat ditukar / dikembalikan.</p>
+              <p className="mt-2 font-bold">- SALAPP POS -</p>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

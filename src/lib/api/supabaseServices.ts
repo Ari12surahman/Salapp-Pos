@@ -97,6 +97,14 @@ export const supabaseServices = {
     return { status: 'success', data: mapKeysToLower(data) };
   },
 
+  getDetailTransaksi: async (payload: any) => {
+    const trxId = typeof payload === 'string' ? payload : (payload?.trxId || payload?.TrxID);
+    if (!trxId) return { status: 'error', message: 'TrxID required' };
+    const { data, error } = await supabase.from('DetailTransaksi').select('*').eq('TrxID', trxId);
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: mapKeysToLower(data || []) };
+  },
+
   getDashboard: async (payload: any) => {
     const warungId = payload?.warungId;
     
