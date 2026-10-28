@@ -22,19 +22,34 @@ export default function LaporanPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Struk States & Warung List
+  // Struk States, Warung List & Santri Master
   const [warungs, setWarungs] = useState<any[]>([]);
+  const [santriList, setSantriList] = useState<any[]>([]);
   const [selectedStruk, setSelectedStruk] = useState<any | null>(null);
   const [loadingStruk, setLoadingStruk] = useState(false);
+
+  const getSantriName = (rawId: any) => {
+    if (!rawId || String(rawId).trim().toUpperCase() === "GUEST") return "GUEST";
+    const cleanId = String(rawId).trim().replace(/^0+/, '');
+    const found = santriList.find((s: any) => {
+      const sNis = String(s.nis || '').trim().replace(/^0+/, '');
+      const sUid = String(s.uid || '').trim().replace(/^0+/, '');
+      return sNis === cleanId || sUid === cleanId || String(s.id) === cleanId;
+    });
+    return found?.nama || rawId;
+  };
 
   const handleOpenStruk = async (item: any, meta: any) => {
     const warungObj = warungs.find((w: any) => String(w.id || w.ID) === String(meta.warungId));
     const warungName = warungObj?.nama || user?.warungName || "KANTIN PONDOK";
 
+    const rawPembeli = meta.pembeli || "";
+    let namaSantri = getSantriName(rawPembeli);
+
     setSelectedStruk({
       trxId: meta.trxId,
       waktu: meta.waktu,
-      pembeli: meta.pembeli,
+      pembeli: namaSantri,
       total: meta.total,
       metode: meta.metode || "Tunai",
       warungName,
@@ -43,6 +58,21 @@ export default function LaporanPage() {
     setLoadingStruk(true);
 
     try {
+      // Jika namaSantri masih berupa angka NIS (belum sempat termuat di santriList)
+      const cleanRaw = String(rawPembeli).trim().replace(/^0+/, '');
+      if (rawPembeli && String(rawPembeli).toUpperCase() !== "GUEST" && /^\d+$/.test(cleanRaw) && namaSantri === rawPembeli) {
+        const { supabase } = await import('@/lib/supabase');
+        const { data: sData } = await supabase
+          .from('Data Santri')
+          .select('nama')
+          .or(`nis.eq.${rawPembeli},nis.eq.${cleanRaw},uid.eq.${rawPembeli}`)
+          .maybeSingle();
+        if (sData?.nama) {
+          namaSantri = sData.nama;
+          setSelectedStruk((prev: any) => prev ? { ...prev, pembeli: sData.nama } : null);
+        }
+      }
+
       const res = await api.post('getDetailTransaksi', { trxId: meta.trxId });
       if (res?.data && Array.isArray(res.data)) {
         setSelectedStruk((prev: any) => prev ? { ...prev, items: res.data } : null);
@@ -90,6 +120,9 @@ export default function LaporanPage() {
     fetchTransaksi();
     api.get('getWarung').then(res => {
       if (res?.data && Array.isArray(res.data)) setWarungs(res.data);
+    }).catch(() => {});
+    api.get('getSantri').then(res => {
+      if (res?.data && Array.isArray(res.data)) setSantriList(res.data);
     }).catch(() => {});
     const interval = setInterval(() => {
       fetchTransaksi(true);
@@ -324,9 +357,12 @@ export default function LaporanPage() {
   const filteredData = data.filter(t => {
     if (!search) return true;
     const trxId = getValGlobal(t, ['idtransaksi', 'trxid', 'id']) || "";
-    const pembeli = getValGlobal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "";
+    const pembeliId = getValGlobal(t, ['idsantri', 'santriid', 'santri', 'pembeli']) || "";
+    const pembeliNama = getSantriName(pembeliId);
     const query = search.toLowerCase();
-    return String(trxId).toLowerCase().includes(query) || String(pembeli).toLowerCase().includes(query);
+    return String(trxId).toLowerCase().includes(query) || 
+           String(pembeliId).toLowerCase().includes(query) || 
+           String(pembeliNama).toLowerCase().includes(query);
   });
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -451,7 +487,8 @@ export default function LaporanPage() {
 
                   const trxId = getVal(['idtransaksi', 'trxid', 'id']) || `TRX-${idx}`;
                   const waktu = getVal(['waktu', 'tanggal', 'timestamp']) || "-";
-                  const pembeli = getVal(['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST";
+                  const pembeliId = getVal(['idsantri', 'santriid', 'santri', 'pembeli']) || "GUEST";
+                  const pembeliNama = getSantriName(pembeliId);
                   const total = getVal(['total', 'totalharga', 'harga', 'nominal']) || 0;
                   const metode = getVal(['metode', 'method']) || "Tunai";
                   const warungId = getVal(['warungid', 'warungId', 'warung']) || "";
@@ -472,7 +509,12 @@ export default function LaporanPage() {
                           ? new Date(waktu).toLocaleString('id-ID') 
                           : waktu}
                       </td>
-                      <td className="p-3 uppercase">{pembeli}</td>
+                      <td className="p-3 uppercase">
+                        <span className="font-semibold block">{pembeliNama}</span>
+                        {pembeliNama !== pembeliId && pembeliId !== "GUEST" && (
+                          <span className="text-[10px] text-muted-foreground font-mono block">NIS: {pembeliId}</span>
+                        )}
+                      </td>
                       <td className="p-3 text-right font-bold text-primary print:text-black">
                         Rp {Number(total).toLocaleString('id-ID')}
                       </td>
@@ -483,7 +525,7 @@ export default function LaporanPage() {
                             size="icon" 
                             className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" 
                             title="Lihat & Cetak Struk" 
-                            onClick={() => handleOpenStruk(item, { trxId, waktu, pembeli, total, metode, warungId })}
+                            onClick={() => handleOpenStruk(item, { trxId, waktu, pembeli: pembeliNama, total, metode, warungId })}
                           >
                             <Receipt className="w-4 h-4" />
                           </Button>
