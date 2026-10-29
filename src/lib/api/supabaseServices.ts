@@ -19,9 +19,18 @@ export const supabaseServices = {
   },
 
   getTabungan: async () => {
-    const { data, error } = await supabase.from('Tabungan').select('*');
-    if (error) return { status: 'error', message: error.message };
-    return { status: 'success', data: mapKeysToLower(data) };
+    let allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('Tabungan').select('*').range(from, from + step - 1);
+      if (error) return { status: 'error', message: error.message };
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < step) break;
+      from += step;
+    }
+    return { status: 'success', data: mapKeysToLower(allData) };
   },
 
   getWarung: async () => {
