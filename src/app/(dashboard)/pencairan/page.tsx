@@ -6,7 +6,7 @@ import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Wallet, Info, CheckCircle2, Clock, Loader2, Store, BadgePercent, Calculator, ShieldCheck, ArrowRight, Sparkles, SlidersHorizontal, X } from "lucide-react";
+import { Wallet, Info, CheckCircle2, Clock, Loader2, Store, BadgePercent, Calculator, ShieldCheck, ArrowRight, Sparkles, SlidersHorizontal, X, Receipt, Printer, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -27,6 +27,8 @@ export default function PencairanPage() {
   const isAdmin = user?.role === 'Super Admin' || user?.role === 'Admin' || user?.warungId === 'ALL';
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [configForm, setConfigForm] = useState<any>(null);
+  const [selectedStrukPencairan, setSelectedStrukPencairan] = useState<any | null>(null);
+
   const activeWarungId = (user?.warungId && user.warungId !== "ALL") 
     ? user.warungId 
     : (selectedWarungId || (warungList[0]?.id || ""));
@@ -50,7 +52,7 @@ export default function PencairanPage() {
     refetchInterval: 10000,
   });
 
-  // Fetch MasterConfig for MOU Fee Deduction Status
+  // Fetch MasterConfig for Fee Deduction Status
   const { data: configData } = useQuery({
     queryKey: ['masterConfigPencairan'],
     queryFn: async () => {
@@ -117,7 +119,7 @@ export default function PencairanPage() {
         kunci: 'pencairanFeeConfig',
         nilai: JSON.stringify(configForm)
       }, { onConflict: 'kunci' });
-      toast.success("Pengaturan MOU dan Biaya Kader berhasil disimpan!");
+      toast.success("Pengaturan Tagihan Kader & Tagihan Aplikasi berhasil disimpan!");
       queryClient.invalidateQueries({ queryKey: ['masterConfigPencairan'] });
       setIsConfigModalOpen(false);
     } catch (err: any) {
@@ -125,8 +127,9 @@ export default function PencairanPage() {
     }
   };
 
+  // Hitung akumulasi yang sudah dibayarkan di bulan ini
   Object.values(feeHistory).forEach((h: any) => {
-    if (h && String(h.warungId) === String(activeWarungId) && h.periodeBulan === currentPeriodeBulan) {
+    if (String(h.warungId) === String(activeWarungId) && h.periodeBulan === currentPeriodeBulan) {
       terbayarAplikasi += Number(h.potonganAplikasi || 0);
       terbayarKader += Number(h.potonganKader || 0);
     }
@@ -141,9 +144,9 @@ export default function PencairanPage() {
   const maxPotongPersen = Number(feeConfig.maxPotongPersen ?? 50);
   const maxPotongan = Math.floor(totalDanaEligible * (maxPotongPersen / 100));
 
-  const estPotongAplikasi = Math.min(sisaAplikasi, maxPotongan);
-  const estPotongKader = Math.min(sisaKader, Math.max(0, maxPotongan - estPotongAplikasi));
-  const estTotalPotongan = estPotongAplikasi + estPotongKader;
+  const estPotongKader = Math.min(sisaKader, maxPotongan);
+  const estPotongAplikasi = Math.min(sisaAplikasi, Math.max(0, maxPotongan - estPotongKader));
+  const estTotalPotongan = estPotongKader + estPotongAplikasi;
   const estDanaBersih = Math.max(0, totalDanaEligible - estTotalPotongan);
   const estSisaSetelahPencairan = Math.max(0, totalSisa - estTotalPotongan);
 
@@ -151,22 +154,22 @@ export default function PencairanPage() {
     if (trxIds.length === 0) return;
 
     const potongSummary = isLunas 
-      ? "Rp 0 (MOU LUNAS)" 
+      ? "Rp 0 (LUNAS)" 
       : (estTotalPotongan > 0 
-          ? `-Rp ${estTotalPotongan.toLocaleString('id-ID')} (${estPotongAplikasi > 0 ? `Aplikasi Rp ${estPotongAplikasi.toLocaleString('id-ID')}` : ''}${estPotongKader > 0 ? `${estPotongAplikasi > 0 ? ', ' : ''}Kader Rp ${estPotongKader.toLocaleString('id-ID')}` : ''})`
+          ? `-Rp ${estTotalPotongan.toLocaleString('id-ID')} (${estPotongKader > 0 ? `Tagihan Kader: Rp ${estPotongKader.toLocaleString('id-ID')}` : ''}${estPotongAplikasi > 0 ? `${estPotongKader > 0 ? ', ' : ''}Tagihan Aplikasi: Rp ${estPotongAplikasi.toLocaleString('id-ID')}` : ''})`
           : "Rp 0");
 
     const message = [
       `Detail Rincian Pengajuan:`,
       `• Warung: ${activeWarungName}`,
       `• Pengajuan Kotor: Rp ${totalDanaEligible.toLocaleString('id-ID')}`,
-      `• Estimasi Potongan MOU: ${potongSummary}`,
+      `• Estimasi Potongan Tagihan: ${potongSummary}`,
       `• Estimasi Bersih Diterima: Rp ${estDanaBersih.toLocaleString('id-ID')}`,
       ``,
       isLunas
-        ? `Kewajiban MOU bulan ini telah lunas, dana akan dicairkan 100% utuh tanpa potongan.`
+        ? `Seluruh tagihan bulan ini telah lunas, dana akan dicairkan 100% utuh tanpa potongan.`
         : (estTotalPotongan > 0 
-            ? `Dana bersih sekitar Rp ${estDanaBersih.toLocaleString('id-ID')} akan ditransfer ke rekening warung. Sisa tanggungan MOU bulan ini menjadi Rp ${estSisaSetelahPencairan.toLocaleString('id-ID')} (dilanjutkan pada pencairan berikutnya).`
+            ? `Dana bersih sekitar Rp ${estDanaBersih.toLocaleString('id-ID')} akan ditransfer ke rekening warung. Sisa tagihan bulan ini menjadi Rp ${estSisaSetelahPencairan.toLocaleString('id-ID')} (dilanjutkan pada pencairan berikutnya).`
             : `Dana pengajuan akan diproses oleh Bendahara.`),
       ``,
       `Lanjutkan proses pengajuan pencairan?`
@@ -184,6 +187,53 @@ export default function PencairanPage() {
         trxIds: trxIds,
         totalDana: totalDanaEligible
       });
+    }
+  };
+
+  const handleCopyWhatsAppPencairan = (data: any) => {
+    if (!data) return;
+    const { item, hist, warungName } = data;
+    const tgl = item.waktuselesai || item.WaktuSelesai || item.waktupengajuan || item.WaktuPengajuan;
+    const tglStr = tgl ? new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+    const totalKotor = Number(hist?.totalKotor || item.totaldana || item.TotalDana || 0);
+    const potKader = Number(hist?.potonganKader || 0);
+    const potAplikasi = Number(hist?.potonganAplikasi || 0);
+    const totalPot = Number(hist?.totalPotongan || (potKader + potAplikasi));
+    const totalBersih = Number(hist?.totalBersih || (totalKotor - totalPot));
+    const sisaKaderVal = Number(hist?.sisaKaderSetelah || 0);
+    const sisaAplikasiVal = Number(hist?.sisaAplikasiSetelah || 0);
+
+    const text = 
+`*BUKTI PENCAIRAN SALDO KANTIN*
+---------------------------------------
+Nama Warung: *${warungName}*
+ID Pencairan: \`${item.idpencairan || item.IDPencairan}\`
+Tanggal: ${tglStr}
+Periode: *${hist?.periodeBulan || currentPeriodeLabel}*
+
+*RINCIAN DANA:*
+  Total Penjualan Non-Tunai: *Rp ${totalKotor.toLocaleString('id-ID')}*
+
+*POTONGAN TAGIHAN:*
+  Tagihan Kader: -Rp ${potKader.toLocaleString('id-ID')}
+  Tagihan Aplikasi: -Rp ${potAplikasi.toLocaleString('id-ID')}
+  Total Terpotong: *-Rp ${totalPot.toLocaleString('id-ID')}*
+
+---------------------------------------
+*TOTAL BERSIH DITERIMA:*
+*Rp ${totalBersih.toLocaleString('id-ID')}*
+---------------------------------------
+
+*SISA TAGIHAN BULAN INI:*
+  Tagihan Kader: Rp ${sisaKaderVal.toLocaleString('id-ID')}
+  Tagihan Aplikasi: Rp ${sisaAplikasiVal.toLocaleString('id-ID')}
+
+Terima kasih atas kerja samanya.
+- KEUANGAN PONDOK PESANTREN -`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      toast.success("Format WhatsApp berhasil disalin!");
     }
   };
 
@@ -215,7 +265,7 @@ export default function PencairanPage() {
         )}
       </div>
 
-      {/* BANNER STATUS KEWAJIBAN BULANAN (MOU) */}
+      {/* BANNER STATUS KEWAJIBAN BULANAN (TAGIHAN KADER & APLIKASI) */}
       <div className="bg-card border-2 border-border p-5 rounded-2xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
@@ -224,7 +274,7 @@ export default function PencairanPage() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-bold text-sm uppercase">
-                Kewajiban Bulanan Warung ({currentPeriodeLabel})
+                Kewajiban Tagihan Warung ({currentPeriodeLabel})
               </h3>
               {isLunas ? (
                 <span className="text-[11px] bg-green-100 text-green-700 font-bold px-2.5 py-0.5 rounded-full border border-green-200 flex items-center gap-1">
@@ -232,12 +282,12 @@ export default function PencairanPage() {
                 </span>
               ) : (
                 <span className="text-[11px] bg-amber-100 text-amber-700 font-bold px-2.5 py-0.5 rounded-full border border-amber-200">
-                  Sisa Tanggungan: Rp {totalSisa.toLocaleString('id-ID')}
+                  Sisa Tagihan: Rp {totalSisa.toLocaleString('id-ID')}
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground font-mono mt-1">
-              Sewa Aplikasi: Rp {terbayarAplikasi.toLocaleString('id-ID')} / {targetAplikasi.toLocaleString('id-ID')} • Honor Kader: Rp {terbayarKader.toLocaleString('id-ID')} / {targetKader.toLocaleString('id-ID')} {customWarung?.biayaKader !== undefined ? '(Khusus Warung)' : ''}
+              Tagihan Kader: Rp {terbayarKader.toLocaleString('id-ID')} / {targetKader.toLocaleString('id-ID')} {customWarung?.biayaKader !== undefined ? '(Khusus Warung)' : ''} • Tagihan Aplikasi: Rp {terbayarAplikasi.toLocaleString('id-ID')} / {targetAplikasi.toLocaleString('id-ID')}
             </p>
           </div>
         </div>
@@ -251,11 +301,11 @@ export default function PencairanPage() {
               onClick={handleOpenConfigModal}
               className="gap-1.5 font-mono text-xs border-2 shadow-xs"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-primary" /> Atur Biaya Kader / MOU
+              <SlidersHorizontal className="w-3.5 h-3.5 text-primary" /> Atur Tagihan Kader & Aplikasi
             </Button>
           )}
           <div className="text-xs text-muted-foreground bg-muted/60 border border-border/80 px-3 py-2 rounded-xl font-mono max-w-sm">
-            💡 Pemotongan tagihan bertahap (maks. 50% per pencairan) agar modal harian warung terjaga.
+            💡 Pemotongan tagihan bertahap (maks. {maxPotongPersen}% per pencairan) agar modal harian warung terjaga.
           </div>
         </div>
       </div>
@@ -297,46 +347,44 @@ export default function PencairanPage() {
 
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex justify-between items-center text-muted-foreground">
-                  <span>Nominal Pengajuan (Kotor)</span>
+                  <span>Nominal Penjualan (Kotor)</span>
                   <span className="font-bold text-foreground">Rp {totalDanaEligible.toLocaleString('id-ID')}</span>
                 </div>
                 
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    Potongan Tagihan MOU
-                    <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold border border-amber-200">
-                      Maks {maxPotongPersen}%
+                {/* Rincian Potongan: Tagihan Kader & Tagihan Aplikasi */}
+                <div className="space-y-1.5 pt-1 border-t border-border/60">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      Tagihan Kader
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold border border-amber-200">
+                        Maks {maxPotongPersen}%
+                      </span>
                     </span>
-                  </span>
-                  {isLunas ? (
-                    <span className="font-bold text-emerald-600">Rp 0 (LUNAS)</span>
-                  ) : estTotalPotongan > 0 ? (
-                    <span className="font-bold text-amber-600">-Rp {estTotalPotongan.toLocaleString('id-ID')}</span>
-                  ) : (
-                    <span className="text-muted-foreground">Rp 0</span>
+                    {estPotongKader > 0 ? (
+                      <span className="font-bold text-amber-600">-Rp {estPotongKader.toLocaleString('id-ID')}</span>
+                    ) : (
+                      <span className="text-muted-foreground font-medium">{sisaKader === 0 ? 'Rp 0 (LUNAS)' : 'Rp 0'}</span>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Tagihan Aplikasi</span>
+                    {estPotongAplikasi > 0 ? (
+                      <span className="font-bold text-amber-600">-Rp {estPotongAplikasi.toLocaleString('id-ID')}</span>
+                    ) : (
+                      <span className="text-muted-foreground font-medium">{sisaAplikasi === 0 ? 'Rp 0 (LUNAS)' : 'Rp 0'}</span>
+                    )}
+                  </div>
+
+                  {!isLunas && estTotalPotongan > 0 && (
+                    <div className="pl-3 py-1.5 text-[11px] text-muted-foreground border-l-2 border-amber-300 space-y-1 bg-amber-50/50 dark:bg-amber-950/20 rounded-r-lg mt-1">
+                      <div className="flex justify-between text-amber-800 dark:text-amber-300 font-bold">
+                        <span>• Sisa Tagihan Bulan Ini Nanti:</span>
+                        <span>Rp {estSisaSetelahPencairan.toLocaleString('id-ID')}</span>
+                      </div>
+                    </div>
                   )}
                 </div>
-
-                {!isLunas && estTotalPotongan > 0 && (
-                  <div className="pl-3 py-1.5 text-[11px] text-muted-foreground border-l-2 border-amber-300 space-y-1 bg-amber-50/50 dark:bg-amber-950/20 rounded-r-lg">
-                    {estPotongAplikasi > 0 && (
-                      <div className="flex justify-between">
-                        <span>• Sewa Aplikasi:</span>
-                        <span>-Rp {estPotongAplikasi.toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {estPotongKader > 0 && (
-                      <div className="flex justify-between">
-                        <span>• Honor Kader:</span>
-                        <span>-Rp {estPotongKader.toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-amber-800 dark:text-amber-300 font-bold pt-1 border-t border-amber-200/60">
-                      <span>• Sisa Tanggungan Nanti:</span>
-                      <span>Rp {estSisaSetelahPencairan.toLocaleString('id-ID')}</span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* ESTIMASI DANA BERSIH */}
@@ -363,7 +411,7 @@ export default function PencairanPage() {
               <div>
                 <p className="font-bold text-[11px] uppercase tracking-wide">Proteksi Modal Usaha Warung</p>
                 <p className="text-blue-800 dark:text-blue-300 text-[11px] leading-relaxed mt-0.5">
-                  Potongan MOU dibatasi maksimal {maxPotongPersen}% dari setiap pencairan agar uang operasional warung tidak habis. Sisa tagihan dapat dicicil di pencairan berikutnya.
+                  Pemotongan tagihan kader & aplikasi dibatasi maksimal {maxPotongPersen}% dari setiap pencairan agar uang operasional warung tidak habis. Sisa tagihan dapat dicicil di pencairan berikutnya.
                 </p>
               </div>
             </div>
@@ -422,7 +470,7 @@ export default function PencairanPage() {
                               Rp {Number(hist.totalBersih || 0).toLocaleString('id-ID')}
                             </span>
                             <span className="text-[11px] text-muted-foreground font-mono">
-                              Kotor: Rp {totaldana.toLocaleString('id-ID')} • Potong MOU: -Rp {Number(hist.totalPotongan || 0).toLocaleString('id-ID')}
+                              Kotor: Rp {totaldana.toLocaleString('id-ID')} • Potong: {hist.potonganKader ? `Kader -Rp ${Number(hist.potonganKader).toLocaleString('id-ID')}` : ''} {hist.potonganAplikasi ? `Aplikasi -Rp ${Number(hist.potonganAplikasi).toLocaleString('id-ID')}` : ''}
                             </span>
                           </div>
                         ) : (
@@ -445,12 +493,24 @@ export default function PencairanPage() {
                       </div>
                     </div>
 
-                    {status === 'Selesai' && waktuselesai && (
-                      <div className="text-left sm:text-right text-xs">
-                        <div className="text-muted-foreground font-mono">Ditransfer:</div>
-                        <div className="font-bold">{new Date(waktuselesai).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</div>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      {status === 'Selesai' && waktuselesai && (
+                        <div className="text-left sm:text-right text-xs mr-1 hidden md:block">
+                          <div className="text-muted-foreground font-mono">Ditransfer:</div>
+                          <div className="font-bold">{new Date(waktuselesai).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</div>
+                        </div>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setSelectedStrukPencairan({ item, hist, warungName: activeWarungName })}
+                        className="h-8 gap-1.5 font-mono text-xs border shadow-2xs hover:bg-muted"
+                        title="Lihat & Cetak Struk Bukti Pencairan"
+                      >
+                        <Receipt className="w-3.5 h-3.5 text-primary" />
+                        <span>STRUK</span>
+                      </Button>
+                    </div>
                   </div>
                 );
               })
@@ -459,14 +519,176 @@ export default function PencairanPage() {
         </div>
 
       </div>
-      {/* MODAL PENGATURAN BIAYA KADER & MOU PER WARUNG */}
+
+      {/* MODAL STRUK BUKTI PENCAIRAN */}
+      {selectedStrukPencairan && (() => {
+        const { item, hist, warungName } = selectedStrukPencairan;
+        const totaldana = Number(hist?.totalKotor || item.totaldana || item.TotalDana || 0);
+        const potKader = Number(hist?.potonganKader || 0);
+        const potAplikasi = Number(hist?.potonganAplikasi || 0);
+        const totalPotongan = Number(hist?.totalPotongan || (potKader + potAplikasi));
+        const totalBersih = Number(hist?.totalBersih || (totaldana - totalPotongan));
+        const sisaKaderVal = Number(hist?.sisaKaderSetelah || 0);
+        const sisaAplikasiVal = Number(hist?.sisaAplikasiSetelah || 0);
+        const tglPengajuan = item.waktupengajuan || item.WaktuPengajuan;
+        const tglSelesai = item.waktuselesai || item.WaktuSelesai;
+        const idpencairan = item.idpencairan || item.IDPencairan;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 print:p-0 print:bg-white print:block">
+            <style jsx global>{`
+              @media print {
+                body * {
+                  visibility: hidden;
+                }
+                #struk-pencairan-print, #struk-pencairan-print * {
+                  visibility: visible;
+                }
+                #struk-pencairan-print {
+                  position: absolute;
+                  left: 0;
+                  top: 0;
+                  width: 100%;
+                  max-width: 80mm;
+                  margin: 0;
+                  padding: 10px;
+                  color: #000;
+                  background: #fff;
+                }
+              }
+            `}</style>
+
+            <div className="bg-card border-4 border-border w-full max-w-md flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] rounded-2xl overflow-hidden print:hidden">
+              <div className="p-4 border-b-2 border-border flex items-center justify-between bg-muted/40">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-primary" />
+                  <h2 className="text-base font-black uppercase tracking-tight">STRUK BUKTI PENCAIRAN</h2>
+                </div>
+                <button onClick={() => setSelectedStrukPencairan(null)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Isi Struk */}
+              <div className="p-5 bg-white text-black flex justify-center border-b-2 border-border overflow-y-auto max-h-[60vh]">
+                <div id="struk-pencairan-print" className="font-mono text-xs w-full max-w-[72mm] mx-auto text-black">
+                  <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                    <h1 className="font-black text-sm uppercase">{warungName}</h1>
+                    <p className="text-[10px] text-gray-700">STRUK BUKTI PENCAIRAN SALDO</p>
+                    <p className="text-[10px] text-gray-500">================================</p>
+                  </div>
+
+                  <div className="text-[10px] mb-2 leading-tight border-b border-dashed border-gray-400 pb-2 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">ID Pencairan:</span>
+                      <span className="font-bold">{idpencairan}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Waktu Pengajuan:</span>
+                      <span>{tglPengajuan ? new Date(tglPengajuan).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'}) : '-'}</span>
+                    </div>
+                    {tglSelesai && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Waktu Ditransfer:</span>
+                        <span>{new Date(tglSelesai).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <span className="font-bold uppercase text-emerald-700">{item.status || item.Status}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 border-b border-dashed border-gray-400 pb-2 mb-2">
+                    <div className="flex justify-between text-[11px]">
+                      <span>Penjualan Kotor</span>
+                      <span className="font-bold">Rp {totaldana.toLocaleString('id-ID')}</span>
+                    </div>
+                    {potKader > 0 && (
+                      <div className="flex justify-between text-[11px] text-rose-700">
+                        <span>Tagihan Kader</span>
+                        <span className="font-semibold">-Rp {potKader.toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {potAplikasi > 0 && (
+                      <div className="flex justify-between text-[11px] text-rose-700">
+                        <span>Tagihan Aplikasi</span>
+                        <span className="font-semibold">-Rp {potAplikasi.toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {totalPotongan > 0 && (
+                      <div className="flex justify-between text-[10px] text-gray-600 pt-1 border-t border-dotted border-gray-300">
+                        <span>Total Potongan Tagihan</span>
+                        <span className="font-bold text-rose-700">-Rp {totalPotongan.toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bersih Diterima */}
+                  <div className="flex justify-between items-center font-black text-sm mb-2 pt-1 border-b border-dashed border-black pb-2">
+                    <span>BERSIH DITERIMA</span>
+                    <span className="text-base text-emerald-700">Rp {totalBersih.toLocaleString('id-ID')}</span>
+                  </div>
+
+                  {/* Sisa Tagihan Bulan Ini */}
+                  {(sisaKaderVal > 0 || sisaAplikasiVal > 0) ? (
+                    <div className="text-[10px] space-y-0.5 text-gray-700 border-b border-dashed border-gray-400 pb-2 mb-2">
+                      <p className="font-bold">SISA TAGIHAN BULAN INI:</p>
+                      {sisaKaderVal > 0 && (
+                        <div className="flex justify-between">
+                          <span>• Tagihan Kader:</span>
+                          <span>Rp {sisaKaderVal.toLocaleString('id-ID')}</span>
+                        </div>
+                      )}
+                      {sisaAplikasiVal > 0 && (
+                        <div className="flex justify-between">
+                          <span>• Tagihan Aplikasi:</span>
+                          <span>Rp {sisaAplikasiVal.toLocaleString('id-ID')}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-center text-emerald-700 font-bold border-b border-dashed border-gray-400 pb-1 mb-2">
+                      TAGIHAN BULAN INI TELAH LUNAS
+                    </div>
+                  )}
+
+                  <div className="text-center text-[10px] text-gray-600 mt-2">
+                    <p>Simpan struk ini sebagai bukti pencairan sah.</p>
+                    <p className="mt-1 font-bold text-gray-900">- KEUANGAN PONDOK PESANTREN -</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-3 bg-card flex flex-col sm:flex-row gap-2">
+                <Button 
+                  onClick={() => window.print()} 
+                  className="flex-1 gap-2 font-bold text-xs"
+                >
+                  <Printer className="w-4 h-4" /> CETAK STRUK
+                </Button>
+                <Button 
+                  onClick={() => handleCopyWhatsAppPencairan(selectedStrukPencairan)} 
+                  variant="outline" 
+                  className="flex-1 gap-2 font-bold text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                >
+                  <Copy className="w-4 h-4" /> SALIN FORMAT WA
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL PENGATURAN TAGIHAN KADER & APLIKASI PER WARUNG */}
       {isConfigModalOpen && configForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="bg-card border-4 border-border w-full max-w-xl p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] flex flex-col max-h-[85vh] overflow-hidden">
             <div className="flex justify-between items-center pb-3 border-b-2 border-border mb-4">
               <div>
-                <h2 className="text-lg font-black uppercase tracking-tight">PENGATURAN BIAYA KADER & MOU</h2>
-                <p className="text-xs font-mono text-muted-foreground">Sesuaikan tarif sewa aplikasi & honor kader standar maupun khusus per warung.</p>
+                <h2 className="text-lg font-black uppercase tracking-tight">PENGATURAN TAGIHAN KADER & APLIKASI</h2>
+                <p className="text-xs font-mono text-muted-foreground">Sesuaikan tarif tagihan aplikasi & tagihan kader standar maupun khusus per warung.</p>
               </div>
               <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
                 <X className="w-5 h-5" />
@@ -476,7 +698,7 @@ export default function PencairanPage() {
             <form onSubmit={handleSaveConfigModal} className="flex-1 overflow-y-auto pr-1 space-y-4 font-mono text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase tracking-wider">SEWA APLIKASI STANDAR (RP/BLN)</label>
+                  <label className="font-bold uppercase tracking-wider">TAGIHAN APLIKASI STANDAR (RP/BLN)</label>
                   <Input 
                     type="number"
                     min="0"
@@ -486,7 +708,7 @@ export default function PencairanPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase tracking-wider">HONOR KADER STANDAR (RP/BLN)</label>
+                  <label className="font-bold uppercase tracking-wider">TAGIHAN KADER STANDAR (RP/BLN)</label>
                   <Input 
                     type="number"
                     min="0"
@@ -513,7 +735,7 @@ export default function PencairanPage() {
               {/* Pengaturan Khusus per Warung */}
               <div className="pt-3 border-t-2 border-border/80">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-black uppercase tracking-wider text-primary">TARIF KHUSUS HONOR KADER PER WARUNG</span>
+                  <span className="font-black uppercase tracking-wider text-primary">TARIF KHUSUS TAGIHAN KADER PER WARUNG</span>
                   <span className="text-[10px] text-muted-foreground">Kosong = Standar (Rp {(configForm.biayaKader ?? 200000).toLocaleString('id-ID')})</span>
                 </div>
 
@@ -572,5 +794,3 @@ export default function PencairanPage() {
     </div>
   );
 }
-
-

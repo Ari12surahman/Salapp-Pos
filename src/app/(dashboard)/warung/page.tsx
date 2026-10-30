@@ -217,7 +217,7 @@ export default function WarungPage() {
                 const val = customVal !== undefined ? Number(customVal) : Number(defaultVal);
                 return (
                   <div className="flex flex-col border-l-2 border-border pl-2 col-span-2">
-                    <span className="text-[10px] text-muted-foreground">BIAYA KADER (MOU BULANAN)</span>
+                    <span className="text-[10px] text-muted-foreground">TAGIHAN KADER (BULANAN)</span>
                     <span className="font-bold text-xs text-primary">
                       Rp {val.toLocaleString('id-ID')} / bulan {customVal !== undefined ? '(Khusus)' : '(Standar)'}
                     </span>
@@ -262,7 +262,7 @@ export default function WarungPage() {
                 <Input name="pj" value={formData.pj} onChange={handleInputChange} required className="uppercase" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-widest">BIAYA KADER / BULAN (MOU)</label>
+                <label className="text-xs font-bold uppercase tracking-widest">TAGIHAN KADER / BULAN</label>
                 <Input 
                   type="number"
                   min="0"
