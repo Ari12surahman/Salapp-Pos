@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirmStore } from "@/store/confirmStore";
 import { api } from "@/lib/api/axios";
+import { supabase } from "@/lib/supabase";
 
 export default function WarungPage() {
   const [data, setData] = useState<any[]>([]);
@@ -16,12 +17,27 @@ export default function WarungPage() {
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
+  const [feeConfig, setFeeConfig] = useState<any>(null);
+
+  const fetchFeeConfig = async () => {
+    try {
+      const { data } = await supabase.from('MasterConfig').select('*').eq('kunci', 'pencairanFeeConfig').maybeSingle();
+      if (data?.nilai) {
+        setFeeConfig(typeof data.nilai === 'string' ? JSON.parse(data.nilai) : data.nilai);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchFeeConfig();
+  }, []);
+
   const [formData, setFormData] = useState({
-    nama: "", lokasi: "", pj: ""
+    nama: "", lokasi: "", pj: "", biayaKader: ""
   });
 
   const resetForm = () => {
-    setFormData({ nama: "", lokasi: "", pj: "" });
+    setFormData({ nama: "", lokasi: "", pj: "", biayaKader: "" });
     setIsEdit(false);
     setEditId(null);
   };
@@ -37,8 +53,10 @@ export default function WarungPage() {
   };
 
   const handleEditClick = (item: any) => {
+    const customKader = feeConfig?.warungConfig?.[item.id]?.biayaKader;
     setFormData({
-      nama: item.nama, lokasi: item.lokasi, pj: item.pj
+      nama: item.nama, lokasi: item.lokasi, pj: item.pj,
+      biayaKader: customKader !== undefined ? String(customKader) : ""
     });
     setEditId(item.id);
     setIsEdit(true);
@@ -74,6 +92,31 @@ export default function WarungPage() {
       const res = await api.post(endpoint, payload);
       if (res && res.status === "error") throw new Error(res.message);
       
+      // Simpan biaya kader warung ke MasterConfig
+      try {
+        const currentConfig = feeConfig ? JSON.parse(JSON.stringify(feeConfig)) : { biayaAplikasi: 30000, biayaKader: 200000, maxPotongPersen: 50 };
+        const wc = { ...(currentConfig.warungConfig || {}) };
+        const targetId = isEdit ? editId : (res?.data?.id || res?.data?.ID || res?.id || res?.ID);
+        if (targetId) {
+          if (formData.biayaKader !== "" && !isNaN(Number(formData.biayaKader))) {
+            wc[targetId] = { ...(wc[targetId] || {}), biayaKader: Number(formData.biayaKader) };
+          } else {
+            if (wc[targetId]) {
+              delete wc[targetId].biayaKader;
+              if (Object.keys(wc[targetId]).length === 0) delete wc[targetId];
+            }
+          }
+          currentConfig.warungConfig = wc;
+          setFeeConfig(currentConfig);
+          await supabase.from('MasterConfig').upsert({
+            kunci: 'pencairanFeeConfig',
+            nilai: JSON.stringify(currentConfig)
+          }, { onConflict: 'kunci' });
+        }
+      } catch (err) {
+        console.error("Gagal simpan feeConfig warung:", err);
+      }
+
       toast.success(isEdit ? "Warung Berhasil Diubah!" : "Warung Berhasil Ditambahkan!");
       setIsModalOpen(false);
       resetForm();
@@ -168,6 +211,19 @@ export default function WarungPage() {
                 <span className="text-[10px] text-muted-foreground">PENANGGUNG JAWAB</span>
                 <span className="uppercase">{pj}</span>
               </div>
+              {(() => {
+                const customVal = feeConfig?.warungConfig?.[id]?.biayaKader;
+                const defaultVal = feeConfig?.biayaKader ?? 200000;
+                const val = customVal !== undefined ? Number(customVal) : Number(defaultVal);
+                return (
+                  <div className="flex flex-col border-l-2 border-border pl-2 col-span-2">
+                    <span className="text-[10px] text-muted-foreground">BIAYA KADER (MOU BULANAN)</span>
+                    <span className="font-bold text-xs text-primary">
+                      Rp {val.toLocaleString('id-ID')} / bulan {customVal !== undefined ? '(Khusus)' : '(Standar)'}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-end gap-2 mt-2 pt-4 border-t border-border">
@@ -204,6 +260,18 @@ export default function WarungPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-widest">NAMA PENANGGUNG JAWAB</label>
                 <Input name="pj" value={formData.pj} onChange={handleInputChange} required className="uppercase" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold uppercase tracking-widest">BIAYA KADER / BULAN (MOU)</label>
+                <Input 
+                  type="number"
+                  min="0"
+                  name="biayaKader" 
+                  value={formData.biayaKader} 
+                  onChange={handleInputChange} 
+                  placeholder={`Standar: Rp ${(feeConfig?.biayaKader ?? 200000).toLocaleString('id-ID')}`} 
+                />
+                <span className="text-[10px] text-muted-foreground">Kosongkan jika ingin mengikuti tarif standar umum (Rp {(feeConfig?.biayaKader ?? 200000).toLocaleString('id-ID')}).</span>
               </div>
               <div className="flex justify-end gap-2 mt-6">
                 <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); resetForm(); }}>BATAL</Button>
