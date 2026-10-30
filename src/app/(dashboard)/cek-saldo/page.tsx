@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, CreditCard, Loader2, Camera, X } from "lucide-react";
+import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/axios";
@@ -13,7 +13,20 @@ import { toast } from "sonner";
 export default function CekSaldoPage() {
   const { playDing, playError } = useAudio();
   const [cekSaldoInput, setCekSaldoInput] = useState("");
-  const [cekSaldoData, setCekSaldoData] = useState<{ status: 'idle' | 'success' | 'error', nama?: string, saldo?: number, message?: string }>({ status: 'idle' });
+  const [cekSaldoData, setCekSaldoData] = useState<{
+    status: 'idle' | 'success' | 'error';
+    nama?: string;
+    saldo?: number;
+    message?: string;
+    isKamar?: boolean;
+    nis?: string;
+    kelas?: string;
+    pin?: string;
+  }>({ status: 'idle' });
+
+  const [testPinInput, setTestPinInput] = useState("");
+  const [testPinResult, setTestPinResult] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [showPinTest, setShowPinTest] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data: santriMasterData, isLoading: santriLoading } = useQuery({
@@ -30,8 +43,23 @@ export default function CekSaldoPage() {
     if (!id) return;
     try {
       if (santriMasterData) {
-        const foundSantri = santriMasterData.find((s: any) => String(s.nis) === String(id) || String(s.uid) === String(id));
+        const cleanId = String(id).trim();
+        const cleanNoZero = cleanId.replace(/^0+/, '').toLowerCase();
+
+        const foundSantri = santriMasterData.find((s: any) => {
+          const nis = String(s.nis || '').trim();
+          const uid = String(s.uid || '').trim();
+          const rfid = String(s.rfid || '').trim();
+          return nis === cleanId || nis.replace(/^0+/, '') === cleanNoZero ||
+                 uid.toLowerCase() === cleanId.toLowerCase() || uid.replace(/^0+/, '').toLowerCase() === cleanNoZero ||
+                 rfid.toLowerCase() === cleanId.toLowerCase() || rfid.replace(/^0+/, '').toLowerCase() === cleanNoZero;
+        });
+
         if (foundSantri) {
+          const isKamar = String(foundSantri.nis || '').startsWith('KAS-') || 
+                          (foundSantri.nama || '').toLowerCase().startsWith('kas ') || 
+                          String(foundSantri.kelas || '').toLowerCase() === 'asrama';
+
           let saldo = 0;
           if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
             const sNisClean = String(foundSantri.nis).replace(/^0+/, '');
@@ -44,7 +72,18 @@ export default function CekSaldoPage() {
               return jenis === 'tarik' ? sum - nom : sum + nom;
             }, 0);
           }
-          setCekSaldoData({ status: 'success', nama: foundSantri.nama, saldo: saldo });
+          setCekSaldoData({
+            status: 'success',
+            nama: foundSantri.nama,
+            saldo: saldo,
+            isKamar: isKamar,
+            nis: foundSantri.nis,
+            kelas: foundSantri.kelas,
+            pin: foundSantri.pin ? String(foundSantri.pin) : ''
+          });
+          setTestPinInput("");
+          setTestPinResult('idle');
+          setShowPinTest(false);
           playDing();
           setCekSaldoInput("");
         } else {
@@ -68,7 +107,7 @@ export default function CekSaldoPage() {
           <Wallet className="w-8 h-8 md:w-12 md:h-12" /> CEK SALDO
         </h1>
         <p className="font-mono text-sm text-muted-foreground uppercase tracking-widest">
-          INFORMASI SALDO TABUNGAN SANTRI
+          INFORMASI SALDO TABUNGAN SANTRI & DOMPET KAS ASRAMA
         </p>
       </header>
 
@@ -77,7 +116,7 @@ export default function CekSaldoPage() {
         <div className="w-full max-w-md flex flex-col gap-8 relative z-10">
           <div className="text-center space-y-2">
             <h2 className="font-bold uppercase tracking-widest text-lg">SCAN KARTU RFID</h2>
-            <p className="font-mono text-sm text-muted-foreground">Silakan tempelkan kartu pada scanner.</p>
+            <p className="font-mono text-sm text-muted-foreground">Silakan tempelkan kartu santri / kamar pada scanner.</p>
           </div>
 
           <div className="flex gap-2">
@@ -107,15 +146,96 @@ export default function CekSaldoPage() {
 
           <div className="mt-8 min-h-[200px] flex items-center justify-center w-full">
             {cekSaldoData.status === 'success' && (
-              <div className="bg-green-600/10 border-4 border-green-600 p-8 flex flex-col items-center text-center animate-in zoom-in duration-300 w-full h-full justify-center">
-                <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-2">IDENTITAS SANTRI</span>
-                <p className="text-3xl font-black uppercase text-green-800 dark:text-green-300 mb-6">{cekSaldoData.nama}</p>
-                
-                <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-2 border-t-2 border-green-600/30 pt-6 w-full">SISA SALDO AKTIF</span>
-                <p className="text-5xl font-mono font-black tracking-tighter text-green-600 dark:text-green-400">
-                  Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
-                </p>
-              </div>
+              cekSaldoData.isKamar ? (
+                <div className="bg-indigo-600/10 border-4 border-indigo-600 p-6 md:p-8 flex flex-col items-center text-center animate-in zoom-in duration-300 w-full h-full justify-center rounded-2xl relative shadow-md">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-600 text-white font-mono text-xs font-bold uppercase tracking-wider mb-3 shadow-sm">
+                    <Building2 className="w-4 h-4" /> KARTU KAS KAMAR / ASRAMA
+                  </div>
+                  <p className="text-2xl md:text-3xl font-black uppercase text-indigo-950 dark:text-indigo-200 mb-1">
+                    {cekSaldoData.nama}
+                  </p>
+                  <p className="font-mono text-xs text-muted-foreground uppercase tracking-widest mb-4">
+                    NO. REK: {cekSaldoData.nis} • ASRAMA: {cekSaldoData.kelas || 'Asrama'}
+                  </p>
+
+                  <div className="w-full border-t-2 border-indigo-600/30 pt-4">
+                    <span className="font-mono text-xs text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block mb-1 font-bold">
+                      SISA SALDO KAS BERSAMA
+                    </span>
+                    <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
+                      Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 w-full flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 text-xs font-medium">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>Dilindungi PIN 6 Digit untuk transaksi kasir POS</span>
+                    </div>
+
+                    {!showPinTest ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setShowPinTest(true)}
+                        className="text-xs font-bold font-mono text-indigo-700 border-indigo-300 hover:bg-indigo-50 mt-1"
+                      >
+                        <Key className="w-3.5 h-3.5 mr-1" /> TES PIN KARTU
+                      </Button>
+                    ) : (
+                      <div className="mt-2 p-3 bg-card border-2 border-indigo-200 rounded-xl w-full max-w-xs space-y-2 animate-in fade-in">
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase">Verifikasi PIN Kamar:</span>
+                        <div className="flex gap-2">
+                          <Input 
+                            type="password"
+                            maxLength={6}
+                            placeholder="6 Digit PIN..."
+                            value={testPinInput}
+                            onChange={(e) => setTestPinInput(e.target.value)}
+                            className="font-mono text-center tracking-widest text-sm h-9"
+                          />
+                          <Button 
+                            size="sm" 
+                            onClick={() => {
+                              const expected = cekSaldoData.pin || '123456';
+                              if (testPinInput === expected) {
+                                setTestPinResult('correct');
+                                playDing();
+                              } else {
+                                setTestPinResult('wrong');
+                                playError();
+                              }
+                            }}
+                            className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            CEK
+                          </Button>
+                        </div>
+                        {testPinResult === 'correct' && (
+                          <p className="text-xs font-bold text-green-600 flex items-center justify-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> PIN Benar! Kartu siap belanja di POS.
+                          </p>
+                        )}
+                        {testPinResult === 'wrong' && (
+                          <p className="text-xs font-bold text-red-600 flex items-center justify-center gap-1">
+                            <X className="w-3.5 h-3.5" /> PIN Salah! Periksa atau hubungi Admin.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-600/10 border-4 border-green-600 p-8 flex flex-col items-center text-center animate-in zoom-in duration-300 w-full h-full justify-center">
+                  <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-2">IDENTITAS SANTRI</span>
+                  <p className="text-3xl font-black uppercase text-green-800 dark:text-green-300 mb-6">{cekSaldoData.nama}</p>
+                  
+                  <span className="font-mono text-xs text-green-700 dark:text-green-400 uppercase tracking-widest mb-2 border-t-2 border-green-600/30 pt-6 w-full">SISA SALDO AKTIF</span>
+                  <p className="text-5xl font-mono font-black tracking-tighter text-green-600 dark:text-green-400">
+                    Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
+                  </p>
+                </div>
+              )
             )}
 
             {cekSaldoData.status === 'error' && (

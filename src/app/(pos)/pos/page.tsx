@@ -289,45 +289,58 @@ export default function PosPage() {
     
     try {
       if (santriMasterData) {
-        const foundSantri = santriMasterData.find((s: any) => String(s.nis) === String(idToCheck) || String(s.uid) === String(idToCheck));
+        const idClean = String(idToCheck).trim();
+        const idNoZero = idClean.replace(/^0+/, '').toLowerCase();
+        const foundSantri = santriMasterData.find((s: any) => {
+          const sNis = String(s.nis || '').trim();
+          const sUid = String(s.uid || '').trim().toLowerCase();
+          const sRfid = String(s.rfid || '').trim().toLowerCase();
+          return sNis === idClean || sNis.replace(/^0+/, '') === idNoZero ||
+                 sUid === idClean.toLowerCase() || sUid.replace(/^0+/, '') === idNoZero ||
+                 sRfid === idClean.toLowerCase() || sRfid.replace(/^0+/, '') === idNoZero;
+        });
         
         if (foundSantri) {
           let saldo = 0;
           let totalJajanPeriod = 0;
 
-          // Ambil konfigurasi limit santri (override santri -> default -> fallback limit_jajan_harian)
+          const isKamar = String(foundSantri.nis || '').startsWith('KAS-') || (foundSantri.nama || '').toLowerCase().startsWith('kas ');
           const sNis = String(foundSantri.nis);
           const sNisClean = sNis.replace(/^0+/, '');
-          const override = limitConfigData?.santriLimits?.[sNis] || limitConfigData?.santriLimits?.[sNisClean];
 
           let limitJajan = 0;
           let periode = 'harian';
-
-          if (override && override.limit !== undefined) {
-            limitJajan = Number(override.limit);
-            periode = override.periode || 'harian';
-          } else if (limitConfigData?.defaultLimit !== undefined) {
-            limitJajan = Number(limitConfigData.defaultLimit);
-            periode = limitConfigData.defaultPeriode || 'harian';
-          } else {
-            limitJajan = Number(foundSantri.limit_jajan_harian || 0);
-            periode = 'harian';
-          }
-
-          const now = new Date();
-          let startDateStr = now.toISOString().split('T')[0];
           let periodeLabel = 'Hari Ini';
+          let startDateStr = '';
 
-          if (periode === 'mingguan') {
-            periodeLabel = 'Minggu Ini';
-            const d = new Date(now);
-            const day = d.getDay();
-            const diff = (day === 0 ? -6 : 1) - day;
-            d.setDate(d.getDate() + diff);
-            startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          } else if (periode === 'bulanan') {
-            periodeLabel = 'Bulan Ini';
-            startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+          // Akun Dompet Kas Kamar tidak dikenakan limit jajan harian santri
+          if (!isKamar) {
+            const override = limitConfigData?.santriLimits?.[sNis] || limitConfigData?.santriLimits?.[sNisClean];
+            if (override && override.limit !== undefined) {
+              limitJajan = Number(override.limit);
+              periode = override.periode || 'harian';
+            } else if (limitConfigData?.defaultLimit !== undefined) {
+              limitJajan = Number(limitConfigData.defaultLimit);
+              periode = limitConfigData.defaultPeriode || 'harian';
+            } else {
+              limitJajan = Number(foundSantri.limit_jajan_harian || 0);
+              periode = 'harian';
+            }
+
+            const now = new Date();
+            startDateStr = now.toISOString().split('T')[0];
+
+            if (periode === 'mingguan') {
+              periodeLabel = 'Minggu Ini';
+              const d = new Date(now);
+              const day = d.getDay();
+              const diff = (day === 0 ? -6 : 1) - day;
+              d.setDate(d.getDate() + diff);
+              startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            } else if (periode === 'bulanan') {
+              periodeLabel = 'Bulan Ini';
+              startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+            }
           }
 
           if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
@@ -1066,8 +1079,19 @@ export default function PosPage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-canvas w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center border-b border-whisper">
-              <h2 className="text-xl font-bold text-ink mb-1">Masukkan PIN</h2>
-              <p className="text-sm text-steel">Tabungan: {pendingBuyer.nama}</p>
+              <div className="flex justify-center mb-2">
+                {String(pendingBuyer.nis || '').startsWith('KAS-') || (pendingBuyer.nama || '').toLowerCase().startsWith('kas ') ? (
+                  <span className="px-3 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full text-xs font-bold uppercase tracking-wider">
+                    🛡️ Otorisasi Kas Kamar
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 rounded-full text-xs font-bold uppercase tracking-wider">
+                    Tabungan Santri
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-ink mb-1">Masukkan PIN 6-Digit</h2>
+              <p className="text-sm text-steel font-medium">{pendingBuyer.nama}</p>
               
               <div className="flex justify-center gap-3 my-6">
                 {[...Array(6)].map((_, i) => (

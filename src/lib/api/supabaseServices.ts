@@ -433,8 +433,9 @@ export const supabaseServices = {
   },
 
   simpanTransaksiOffline: async (payload: any) => {
-    // Validasi Limit Tabungan (Harian, Mingguan, Bulanan)
-    if (payload.method === 'Tabungan' && payload.santriId) {
+    // Validasi Limit Tabungan (Harian, Mingguan, Bulanan) - Dilewati untuk Akun Dompet Kas Kamar
+    const isKasKamar = String(payload.santriId || '').startsWith('KAS-');
+    if (payload.method === 'Tabungan' && payload.santriId && !isKasKamar) {
       const [{ data: santri }, { data: configRow }] = await Promise.all([
         supabase.from('Data Santri').select('limit_jajan_harian, nama').eq('nis', payload.santriId).maybeSingle(),
         supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle()
