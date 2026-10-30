@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy } from "lucide-react";
+import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,22 @@ export default function PosPage() {
   const { addPending } = useSyncStore();
   const [cashAmount, setCashAmount] = useState<string>("");
   const [changeAmount, setChangeAmount] = useState<number>(0);
+
+  // Quick Cek Saldo Kasir Modal
+  const [modalCekSaldoOpen, setModalCekSaldoOpen] = useState(false);
+  const [modalCekSaldoInput, setModalCekSaldoInput] = useState("");
+  const [modalCekSaldoLoading, setModalCekSaldoLoading] = useState(false);
+  const [modalCekSaldoData, setModalCekSaldoData] = useState<{
+    status: 'idle' | 'success' | 'error';
+    nama?: string;
+    nis?: string;
+    kelas?: string;
+    saldo?: number;
+    isKamar?: boolean;
+    hasPin?: boolean;
+    message?: string;
+    mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
+  }>({ status: 'idle' });
 
   const { data: santriMasterData, isLoading: santriLoading, refetch: refetchSantri, isFetching: isFetchingSantri } = useQuery({
     queryKey: ['santriMaster'],
@@ -406,6 +422,98 @@ export default function PosPage() {
     } catch (err) {
       toast.error("Gagal mengecek data santri");
       playError();
+    }
+  };
+
+  const handleQuickCekSaldo = async (id: string) => {
+    if (!id) return;
+    setModalCekSaldoLoading(true);
+    try {
+      const cleanId = String(id).trim();
+      const cleanNoZero = cleanId.replace(/^0+/, '').toLowerCase();
+
+      let currentSantriList = santriMasterData;
+      let currentTabunganList = tabunganMasterData;
+
+      const matchSantri = (list: any[]) => {
+        if (!Array.isArray(list)) return null;
+        return list.find((s: any) => {
+          const nis = String(s.nis || '').trim();
+          const uid = String(s.uid || '').trim();
+          const rfid = String(s.rfid || '').trim();
+          return nis === cleanId || nis.replace(/^0+/, '') === cleanNoZero ||
+                 uid.toLowerCase() === cleanId.toLowerCase() || uid.replace(/^0+/, '').toLowerCase() === cleanNoZero ||
+                 rfid.toLowerCase() === cleanId.toLowerCase() || rfid.replace(/^0+/, '').toLowerCase() === cleanNoZero;
+        });
+      };
+
+      let found = matchSantri(currentSantriList);
+      if (!found || !currentTabunganList) {
+        try {
+          const [resS, resT] = await Promise.all([
+            api.get('getSantri', { params: { spreadsheetId: "1jrUrg3DVS0migGJdWuzaRj4WJ65hS_ZSPG7y7bwPHe0" } }),
+            api.get('getTabungan')
+          ]);
+          if (resS?.data) {
+            currentSantriList = resS.data;
+            found = matchSantri(currentSantriList);
+          }
+          if (resT?.data) currentTabunganList = resT.data;
+        } catch (fetchErr) {
+          console.warn("Live fetch fallback error in quick cek saldo:", fetchErr);
+        }
+      }
+
+      if (found) {
+        const isKamar = String(found.nis || '').startsWith('KAS-') || 
+                        (found.nama || '').toLowerCase().startsWith('kas ') || 
+                        String(found.kelas || '').toLowerCase() === 'asrama';
+
+        let saldo = 0;
+        let recentMutasi: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }> = [];
+
+        if (currentTabunganList && Array.isArray(currentTabunganList)) {
+          const sNisClean = String(found.nis).replace(/^0+/, '');
+          const foundRows = currentTabunganList.filter((t: any) => 
+            String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
+          );
+          saldo = foundRows.reduce((sum: number, t: any) => {
+            const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+            const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+            return (jenis === 'tarik' || jenis === 'keluar') ? sum - nom : sum + nom;
+          }, 0);
+
+          const sortedRows = [...foundRows].reverse();
+          recentMutasi = sortedRows.slice(0, 3).map((t: any) => ({
+            tanggal: t.tanggal || t.Tanggal || '-',
+            jenis: t.jenis || t.Jenis || 'Setor',
+            nominal: Number(t.nominal || t.Nominal || 0),
+            keterangan: t.keterangan || t.Keterangan || ''
+          }));
+        }
+
+        setModalCekSaldoData({
+          status: 'success',
+          nama: found.nama,
+          nis: found.nis,
+          kelas: found.kelas,
+          saldo: saldo,
+          isKamar: isKamar,
+          hasPin: !!found.pin,
+          mutasi: recentMutasi
+        });
+        playDing();
+        setModalCekSaldoInput("");
+      } else {
+        setModalCekSaldoData({ status: 'error', message: 'Kartu RFID tidak terdaftar di sistem' });
+        playError();
+        setModalCekSaldoInput("");
+      }
+    } catch (err) {
+      setModalCekSaldoData({ status: 'error', message: 'Gagal mengecek saldo' });
+      playError();
+    } finally {
+      setModalCekSaldoLoading(false);
     }
   };
 
@@ -847,6 +955,32 @@ export default function PosPage() {
               disabled={isFetchingProducts || isFetchingSantri || isFetchingTabungan}
             >
               <RefreshCw className={`w-4 h-4 ${isFetchingProducts || isFetchingSantri || isFetchingTabungan ? "animate-spin" : ""}`} />
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setModalCekSaldoOpen(true);
+                setModalCekSaldoData({ status: 'idle' });
+                setModalCekSaldoInput('');
+              }} 
+              className="font-bold hidden sm:flex items-center gap-1.5 border-emerald-600/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              title="Cek Saldo Santri / Kas Kamar"
+            >
+              <Wallet className="w-4 h-4 text-emerald-600" />
+              <span>CEK SALDO</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => {
+                setModalCekSaldoOpen(true);
+                setModalCekSaldoData({ status: 'idle' });
+                setModalCekSaldoInput('');
+              }} 
+              className="sm:hidden shrink-0 text-emerald-700 dark:text-emerald-400 border-emerald-600/40"
+              title="Cek Saldo Kartu"
+            >
+              <Wallet className="w-4 h-4 text-emerald-600" />
             </Button>
             <Button variant="outline" size="icon" className="shrink-0"><Filter className="w-4 h-4" /></Button>
             <Button variant="secondary" onClick={handleClosing} className="font-bold hidden lg:flex">
@@ -1924,6 +2058,140 @@ export default function PosPage() {
             <div className={`border-t-4 p-2 flex justify-between items-center font-mono text-[10px] uppercase ${checkoutAlert.type === 'success' ? 'border-green-600 bg-green-600/10' : 'border-red-600 bg-red-600/10'}`}>
               <span className="animate-pulse font-bold">» AUTO_CLOSING_ROUTINE_ACTIVE...</span>
               <span className="opacity-50">SYS_REV 1.0 // POS_TERMINAL</span>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL QUICK CEK SALDO KASIR */}
+      {modalCekSaldoOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg border-4 border-border bg-card shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] dark:shadow-[12px_12px_0px_0px_rgba(255,255,255,1)] flex flex-col overflow-hidden">
+            <div className="p-4 border-b-2 border-border bg-muted/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-black uppercase tracking-tight text-lg">CEK SALDO KARTU</h3>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-none hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setModalCekSaldoOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="font-mono text-xs text-muted-foreground uppercase tracking-widest block font-bold">
+                  TEMPELKAN KARTU SANTRI / ASRAMA:
+                </label>
+                <div className="flex gap-2">
+                  <Input 
+                    type="text"
+                    style={{ WebkitTextSecurity: 'disc' } as any}
+                    autoComplete="off"
+                    autoFocus
+                    placeholder="Scan RFID / Masukkan NIS..."
+                    value={modalCekSaldoInput}
+                    onChange={(e) => setModalCekSaldoInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleQuickCekSaldo(modalCekSaldoInput);
+                    }}
+                    className="font-mono text-center text-lg h-12 uppercase"
+                    disabled={modalCekSaldoLoading}
+                  />
+                  <Button 
+                    className="h-12 px-6 font-bold"
+                    onClick={() => handleQuickCekSaldo(modalCekSaldoInput)}
+                    disabled={modalCekSaldoLoading}
+                  >
+                    {modalCekSaldoLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'CEK'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* HASIL CEK SALDO */}
+              {modalCekSaldoData.status === 'success' && (
+                <div className={`p-5 border-4 rounded-xl space-y-3 ${
+                  modalCekSaldoData.isKamar ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' : 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20'
+                }`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono uppercase tracking-wider mb-1.5 text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900">
+                        {modalCekSaldoData.isKamar ? <Building2 className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5" />}
+                        {modalCekSaldoData.isKamar ? 'KARTU KAS KAMAR' : 'KARTU SANTRI'}
+                      </div>
+                      <h4 className="text-xl font-black uppercase text-foreground leading-tight">
+                        {modalCekSaldoData.nama}
+                      </h4>
+                      <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                        NO: {modalCekSaldoData.nis} • {modalCekSaldoData.isKamar ? `ASRAMA: ${modalCekSaldoData.kelas || '-'}` : `KELAS: ${modalCekSaldoData.kelas || '-'}`}
+                      </p>
+                    </div>
+
+                    {modalCekSaldoData.isKamar && modalCekSaldoData.hasPin && (
+                      <span className="flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-1 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <ShieldCheck className="w-3.5 h-3.5" /> PIN AKTIF
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t-2 border-border/40">
+                    <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest block font-bold">
+                      SISA SALDO SAAT INI:
+                    </span>
+                    <p className={`text-3xl font-mono font-black tracking-tight ${
+                      modalCekSaldoData.isKamar ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      Rp {(modalCekSaldoData.saldo || 0).toLocaleString('id-ID')}
+                    </p>
+                  </div>
+
+                  {modalCekSaldoData.mutasi && modalCekSaldoData.mutasi.length > 0 && (
+                    <div className="pt-2 border-t-2 border-border/40 space-y-1.5">
+                      <div className="flex items-center gap-1 text-[10px] font-bold font-mono uppercase text-muted-foreground">
+                        <History className="w-3 h-3" /> Mutasi Terakhir:
+                      </div>
+                      <div className="space-y-1 font-mono text-[11px]">
+                        {modalCekSaldoData.mutasi.map((m, idx) => {
+                          const isTarik = String(m.jenis).toLowerCase() === 'tarik';
+                          return (
+                            <div key={idx} className="flex justify-between items-center p-1.5 rounded bg-background/80 border border-border/60">
+                              <span className="truncate max-w-[200px] text-muted-foreground">{m.keterangan || (isTarik ? 'Belanja' : 'Setor')}</span>
+                              <span className={`font-bold shrink-0 ${isTarik ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {isTarik ? '-' : '+'} Rp {m.nominal.toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {modalCekSaldoData.status === 'error' && (
+                <div className="p-4 border-2 border-red-600 bg-red-500/10 rounded-xl text-center font-bold text-red-600 text-sm flex items-center justify-center gap-2">
+                  <X className="w-5 h-5 shrink-0" /> {modalCekSaldoData.message}
+                </div>
+              )}
+
+              {modalCekSaldoData.status === 'idle' && (
+                <div className="p-6 border-2 border-dashed border-border rounded-xl text-center text-muted-foreground font-mono text-xs uppercase">
+                  Silakan tempelkan kartu pada scanner RFID untuk cek saldo
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t-2 border-border bg-muted/20 flex justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => setModalCekSaldoOpen(false)}
+                className="font-bold text-xs"
+              >
+                TUTUP
+              </Button>
             </div>
           </div>
         </div>

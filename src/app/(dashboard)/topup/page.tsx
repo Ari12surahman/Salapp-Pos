@@ -23,7 +23,16 @@ export default function TopupPage() {
       const resTabungan = await api.get('getTabungan');
       
       if (resSantri.data) {
-        const foundSantri = resSantri.data.find((s: any) => s.nis === rfid || s.rfid === rfid);
+        const cleanId = String(rfid).trim();
+        const cleanNoZero = cleanId.replace(/^0+/, '').toLowerCase();
+        const foundSantri = resSantri.data.find((s: any) => {
+          const sNis = String(s.nis || '').trim();
+          const sUid = String(s.uid || '').trim();
+          const sRfid = String(s.rfid || '').trim();
+          return sNis === cleanId || sNis.replace(/^0+/, '') === cleanNoZero ||
+                 sUid.toLowerCase() === cleanId.toLowerCase() || sUid.replace(/^0+/, '').toLowerCase() === cleanNoZero ||
+                 sRfid.toLowerCase() === cleanId.toLowerCase() || sRfid.replace(/^0+/, '').toLowerCase() === cleanNoZero;
+        });
         if (foundSantri) {
           let saldo = 0;
           if (resTabungan.data && Array.isArray(resTabungan.data)) {
