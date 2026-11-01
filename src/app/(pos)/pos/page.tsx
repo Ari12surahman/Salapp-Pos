@@ -182,7 +182,8 @@ export default function PosPage() {
     url: string, 
     isPaid: boolean, 
     checkoutUrl: string,
-    isSandbox?: boolean
+    isSandbox?: boolean,
+    orderId?: string
   }>({ 
     step: 'CHOOSE_METHOD', 
     qrString: null, 
@@ -848,7 +849,8 @@ export default function PosPage() {
           loading: false,
           isPaid: false,
           checkoutUrl,
-          isSandbox: false
+          isSandbox: true,
+          orderId
         });
         pollPakasirStatus(orderId, amount);
       } else {
@@ -1650,21 +1652,32 @@ export default function PosPage() {
                     <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
                   )}
 
-                  {/* TOMBOL SIMULASI SANDBOX */}
-                  {pakasirData.isSandbox && (
-                    <Button 
-                      variant="destructive" 
-                      className="mt-2 w-full animate-pulse border-2 border-red-800"
-                      onClick={() => {
-                        if (pollingRef.current) clearInterval(pollingRef.current);
-                        setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
-                        processCheckout(paymentMethod);
-                      }}
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      SIMULASI LUNAS (SANDBOX)
-                    </Button>
-                  )}
+                  {/* TOMBOL SIMULASI TEST */}
+                  <Button 
+                    className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    onClick={async () => {
+                      if (pollingRef.current) clearInterval(pollingRef.current);
+                      try {
+                        await fetch('https://salapp-bendahara.web.id/api/doku/webhook', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            order: {
+                              invoice_number: pakasirData.orderId,
+                              amount: getCartTotal()
+                            },
+                            transaction: { status: 'SUCCESS' },
+                            channel: { id: paymentMethod.toUpperCase() }
+                          })
+                        });
+                      } catch (e) {}
+                      setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
+                      processCheckout(paymentMethod);
+                    }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    SIMULASI LUNAS (TEST CALLBACK)
+                  </Button>
 
                   
 
@@ -1723,20 +1736,32 @@ export default function PosPage() {
                     <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
                   )}
 
-                  {/* TOMBOL SIMULASI SANDBOX */}
-                  {pakasirData.isSandbox && (
-                    <Button 
-                      onClick={() => {
-                        if (pollingRef.current) clearInterval(pollingRef.current);
-                        setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
-                        processCheckout(paymentMethod);
-                      }}
-                      className="w-full bg-red-500 hover:bg-red-600 text-white font-bold tracking-widest mt-2"
-                    >
-                      <CheckCircle2 className="w-5 h-5 mr-2" />
-                      SIMULASI LUNAS (SANDBOX)
-                    </Button>
-                  )}
+                  {/* TOMBOL SIMULASI TEST */}
+                  <Button 
+                    onClick={async () => {
+                      if (pollingRef.current) clearInterval(pollingRef.current);
+                      try {
+                        await fetch('https://salapp-bendahara.web.id/api/doku/webhook', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            order: {
+                              invoice_number: pakasirData.orderId,
+                              amount: getCartTotal()
+                            },
+                            transaction: { status: 'SUCCESS' },
+                            channel: { id: paymentMethod.toUpperCase() }
+                          })
+                        });
+                      } catch (e) {}
+                      setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
+                      processCheckout(paymentMethod);
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold tracking-widest mt-2"
+                  >
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                    SIMULASI LUNAS (TEST CALLBACK)
+                  </Button>
 
                   <Button variant="outline" className="w-full font-bold uppercase tracking-widest mt-2" onClick={() => { if(pollingRef.current) clearInterval(pollingRef.current); setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' }); }}>
                     BATAL / KEMBALI

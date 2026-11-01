@@ -9,6 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const DEFAULT_CLIENT_ID = 'BRN-0202-1793347575291';
 const DEFAULT_SECRET_KEY = 'SK-vd9vdq9vK3DDdpfgcpQm';
 const DOKU_BASE_URL = 'https://api.doku.com';
+const DOKU_SANDBOX_BASE_URL = 'https://api-sandbox.doku.com';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
     const action = body.action || 'requestDokuPayment';
     const payload = typeof body.data === 'string' ? JSON.parse(body.data) : (body.data || body);
 
+    const isSandbox = Boolean(payload.isSandbox || process.env.DOKU_IS_SANDBOX === 'true' || (payload.clientId && payload.clientId.startsWith('MCH-')));
+    const activeDokuUrl = isSandbox ? DOKU_SANDBOX_BASE_URL : DOKU_BASE_URL;
     const clientId = payload.clientId || DEFAULT_CLIENT_ID;
     const secretKey = payload.secretKey || DEFAULT_SECRET_KEY;
 
@@ -110,7 +113,7 @@ export async function POST(request: Request) {
         const bodyStr = JSON.stringify(vaBody);
         const { signature, digest } = generateSignature(clientId, requestId, timestamp, targetPath, bodyStr, secretKey);
 
-        const dokuRes = await fetch(DOKU_BASE_URL + targetPath, {
+        const dokuRes = await fetch(activeDokuUrl + targetPath, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -163,7 +166,7 @@ export async function POST(request: Request) {
       const bodyStr = JSON.stringify(checkoutBody);
       const { signature, digest } = generateSignature(clientId, requestId, timestamp, checkoutPath, bodyStr, secretKey);
 
-      const chkRes = await fetch(DOKU_BASE_URL + checkoutPath, {
+      const chkRes = await fetch(activeDokuUrl + checkoutPath, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,3 +217,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
   }
 }
+
