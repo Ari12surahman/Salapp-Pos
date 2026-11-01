@@ -813,6 +813,9 @@ export default function PosPage() {
   };
 
   const generatePakasir = async (type: string) => {
+    toast.error("Metode pembayaran QRIS dan Virtual Account sedang dinonaktifkan sementara.");
+    setPakasirData(prev => ({ ...prev, loading: false }));
+    return;
     setPakasirData(prev => ({ ...prev, loading: true }));
     try {
       // Retrieve credentials from localStorage
@@ -1446,22 +1449,7 @@ export default function PosPage() {
                     <span>BAYAR PAKAI TABUNGAN</span>
                     <Receipt className="w-6 h-6" />
                   </Button>
-                  <Button 
-                    className="h-16 text-lg font-bold flex justify-between px-6 bg-blue-600 hover:bg-blue-700 text-white border-blue-800" 
-                    onClick={() => { setPaymentMethod('QRIS'); generatePakasir('qris'); }}
-                    disabled={pakasirData.loading}
-                  >
-                    <span>{pakasirData.loading && paymentMethod === 'QRIS' ? "MEMPROSES..." : "BAYAR QRIS"}</span>
-                    <QrCode className="w-6 h-6" />
-                  </Button>
-                  <Button 
-                    className="h-16 text-lg font-bold flex justify-between px-6 bg-orange-600 hover:bg-orange-700 text-white border-orange-800" 
-                    onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
-                    disabled={pakasirData.loading}
-                  >
-                    <span>VIRTUAL ACCOUNT</span>
-                    <CreditCard className="w-6 h-6" />
-                  </Button>
+                  {/* Metode QRIS & Virtual Account di-hide sementara sesuai permintaan user */}
                 </>
               )}
 
