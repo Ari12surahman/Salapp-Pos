@@ -456,7 +456,7 @@ export const supabaseServices = {
       if (override && override.limit !== undefined) {
         limit = Number(override.limit);
         periode = override.periode || 'harian';
-      } else if (limitConfig?.defaultLimit !== undefined) {
+      } else if (limitConfig?.defaultLimit !== undefined && Number(limitConfig.defaultLimit) > 0) {
         limit = Number(limitConfig.defaultLimit);
         periode = limitConfig.defaultPeriode || 'harian';
       } else {
@@ -466,7 +466,10 @@ export const supabaseServices = {
 
       if (limit > 0) {
         const now = new Date();
-        let startDateStr = now.toISOString().split('T')[0];
+        const localYear = now.getFullYear();
+        const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const localDay = String(now.getDate()).padStart(2, '0');
+        let startDateStr = `${localYear}-${localMonth}-${localDay}`;
         let periodeLabel = 'Harian';
 
         if (periode === 'mingguan') {
@@ -478,18 +481,22 @@ export const supabaseServices = {
           startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         } else if (periode === 'bulanan') {
           periodeLabel = 'Bulanan';
-          startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+          startDateStr = `${localYear}-${localMonth}-01`;
         }
 
         const { data: tabungan } = await supabase
           .from('Tabungan')
-          .select('nominal, tanggal')
-          .eq('nis', payload.santriId)
-          .eq('jenis', 'Tarik')
-          .gte('tanggal', startDateStr)
-          .ilike('keterangan', '%kantin%');
+          .select('nominal, tanggal, jenis, keterangan')
+          .or(`nis.eq.${payload.santriId},nis.eq.${sNisClean}`)
+          .in('jenis', ['Tarik', 'tarik', 'Keluar', 'keluar'])
+          .gte('tanggal', startDateStr);
 
-        const totalJajanPeriod = (tabungan || []).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+
+        const totalJajanPeriod = (tabungan || []).reduce((sum, t) => {
+          const ket = String(t.keterangan || '').toLowerCase();
+          const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
+          return isJajan ? sum + Number(t.nominal || 0) : sum;
+        }, 0);
 
         if (totalJajanPeriod + payload.total > limit) {
           const sisa = limit - totalJajanPeriod;

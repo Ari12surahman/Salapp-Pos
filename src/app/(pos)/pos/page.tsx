@@ -335,7 +335,7 @@ export default function PosPage() {
             if (override && override.limit !== undefined) {
               limitJajan = Number(override.limit);
               periode = override.periode || 'harian';
-            } else if (limitConfigData?.defaultLimit !== undefined) {
+            } else if (limitConfigData?.defaultLimit !== undefined && Number(limitConfigData.defaultLimit) > 0) {
               limitJajan = Number(limitConfigData.defaultLimit);
               periode = limitConfigData.defaultPeriode || 'harian';
             } else {
@@ -344,7 +344,10 @@ export default function PosPage() {
             }
 
             const now = new Date();
-            startDateStr = now.toISOString().split('T')[0];
+            const localYear = now.getFullYear();
+            const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+            const localDay = String(now.getDate()).padStart(2, '0');
+            startDateStr = `${localYear}-${localMonth}-${localDay}`;
 
             if (periode === 'mingguan') {
               periodeLabel = 'Minggu Ini';
@@ -352,10 +355,13 @@ export default function PosPage() {
               const day = d.getDay();
               const diff = (day === 0 ? -6 : 1) - day;
               d.setDate(d.getDate() + diff);
-              startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              const mYear = d.getFullYear();
+              const mMonth = String(d.getMonth() + 1).padStart(2, '0');
+              const mDay = String(d.getDate()).padStart(2, '0');
+              startDateStr = `${mYear}-${mMonth}-${mDay}`;
             } else if (periode === 'bulanan') {
               periodeLabel = 'Bulan Ini';
-              startDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+              startDateStr = `${localYear}-${localMonth}-01`;
             }
           }
 
@@ -369,16 +375,19 @@ export default function PosPage() {
               return jenis === 'tarik' ? sum - nom : sum + nom;
             }, 0);
 
-            // Hitung jajan pada periode berjalan jika ada limit
+            // Hitung jajan pada periode berjalan jika ada limit (hanya transaksi jajan/kantin/pos)
             if (limitJajan > 0) {
               totalJajanPeriod = foundTabunganRows.reduce((sum: number, t: any) => {
                 const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
-                const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+                const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase().trim();
                 const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
                 const tgl = String(rawDate).split('T')[0];
                 const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
                 
-                if (jenis === 'tarik' && tgl >= startDateStr && ket.includes('kantin')) {
+                const isWithdraw = jenis === 'tarik' || jenis === 'keluar' || jenis.includes('tarik') || jenis.includes('keluar') || jenis === 'debet' || jenis === 'debit';
+                const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
+
+                if (isWithdraw && isJajan && tgl >= startDateStr) {
                   return sum + nom;
                 }
                 return sum;
