@@ -825,7 +825,9 @@ export default function PosPage() {
     setPakasirData(prev => ({ ...prev, loading: true }));
     try {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const amount = getCartTotal();
+      const cartTotal = getCartTotal();
+      const adminFee = type === 'qris' ? 0 : 3000;
+      const amount = cartTotal + adminFee;
 
       if (type !== 'qris' && amount < 10000) {
         toast.error("Pembayaran Virtual Account minimal Rp 10.000. Untuk total di bawah Rp 10.000 silakan pilih QRIS.");
@@ -1669,32 +1671,7 @@ export default function PosPage() {
                     <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
                   )}
 
-                  {/* TOMBOL SIMULASI TEST */}
-                  <Button 
-                    className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                    onClick={async () => {
-                      if (pollingRef.current) clearInterval(pollingRef.current);
-                      try {
-                        await fetch('https://salapp-bendahara.web.id/api/doku/webhook', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            order: {
-                              invoice_number: pakasirData.orderId,
-                              amount: getCartTotal()
-                            },
-                            transaction: { status: 'SUCCESS' },
-                            channel: { id: paymentMethod.toUpperCase() }
-                          })
-                        });
-                      } catch (e) {}
-                      setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
-                      processCheckout(paymentMethod);
-                    }}
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    SIMULASI LUNAS (TEST CALLBACK)
-                  </Button>
+                  
 
                   
 
@@ -1706,85 +1683,83 @@ export default function PosPage() {
 
               {pakasirData.step === 'SHOW_VA' && (
                 <div className="flex flex-col items-center gap-4 text-center">
-                  <p className="font-bold uppercase tracking-widest">{getBankDisplayName(paymentMethod)} GENERATED</p>
+                  <h3 className="text-xl font-bold text-ink">Transfer Virtual Account</h3>
                   
+                  {/* Tabel Rincian Pembayaran (Persis PortalNative) */}
+                  <div className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm text-sm text-left">
+                    <div className="bg-slate-50 p-3 border-b border-slate-200 text-center font-bold text-slate-800">
+                      Halaman Pembayaran
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      <div className="flex">
+                        <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Order Id</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-mono text-xs flex items-center">{pakasirData.orderId}</div>
+                      </div>
+                      <div className="flex">
+                        <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Nominal</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs">Rp {getCartTotal().toLocaleString("id-ID")}</div>
+                      </div>
+                      <div className="flex">
+                        <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Metode</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs uppercase">{getBankDisplayName(paymentMethod)}</div>
+                      </div>
+                      <div className="flex">
+                        <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Biaya Admin</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs">Rp 3.000</div>
+                      </div>
+                      <div className="flex">
+                        <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Biaya Aplikasi</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs">Rp 0</div>
+                      </div>
+                      <div className="flex bg-slate-50/40">
+                        <div className="w-1/3 p-3 bg-slate-50 border-r border-slate-200 text-slate-900 font-bold text-sm">Total Bayar</div>
+                        <div className="w-2/3 p-3 text-blue-700 font-bold text-base">Rp {(getCartTotal() + 3000).toLocaleString("id-ID")}</div>
+                      </div>
+                    </div>
+                  </div>
+
                   {pakasirTimeLeft > 0 ? (
                     <>
-                      <p className="text-sm font-bold text-red-600 mb-1">
-                        Selesaikan pembayaran sebelum waktu habis: {Math.floor(pakasirTimeLeft / 60)}:{(pakasirTimeLeft % 60).toString().padStart(2, '0')}
+                      <p className="text-sm text-slate-500">
+                        Bayar sebelum batas waktu: <span className="font-bold text-red-600">{Math.floor(pakasirTimeLeft / 60)}:{(pakasirTimeLeft % 60).toString().padStart(2, '0')}</span>
                       </p>
-                      <p className="text-xs font-bold text-red-600 text-center px-4 mb-4">
+                      <p className="text-xs font-bold text-red-600 text-center px-4">
                         ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
                       </p>
 
                       {pakasirData.qrString && (
-                        <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
-                          <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center mx-auto mb-2 shadow-xs">
+                        <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center">
+                          <div className="w-20 h-12 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center mb-2 shadow-xs">
                             <img src={getBankLogo(paymentMethod) || '/banks/bri.png'} alt="Bank" className="w-full h-full object-contain" />
                           </div>
-                          <p className="text-xs font-semibold text-steel uppercase mb-1">{getBankDisplayName(paymentMethod)}</p>
-                          <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{getBankDisplayName(paymentMethod)}</p>
+                          <div className="text-3xl font-mono font-bold text-slate-900 tracking-wider break-all mb-4">{pakasirData.qrString}</div>
+                          
+                          <Button variant="secondary" className="px-6 rounded-full font-bold text-xs" onClick={() => {
+                              navigator.clipboard.writeText(pakasirData.qrString || '');
+                              toast.success("Nomor VA disalin");
+                          }}>
+                            <Copy className="w-4 h-4 mr-2" /> Salin VA
+                          </Button>
                         </div>
                       )}
 
-                      <div className="flex w-full gap-2 mt-2">
-                        <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
-                            navigator.clipboard.writeText(pakasirData.qrString || '');
-                            toast.success("Nomor VA disalin");
-                        }}>
-                          <Copy className="w-4 h-4 mr-2" /> Salin VA
-                        </Button>
-                        <Button variant="secondary" className="flex-1 font-bold" onClick={() => {
-                            navigator.clipboard.writeText(getCartTotal().toString());
-                            toast.success("Nominal disalin");
-                        }}>
-                          <Copy className="w-4 h-4 mr-2" /> Salin Nominal
-                        </Button>
+                      <div className="w-full p-4 bg-blue-50/60 rounded-2xl flex justify-between items-center border border-blue-100">
+                        <div className="text-left">
+                          <p className="text-xs text-blue-600 font-medium">Total Pembayaran</p>
+                          <p className="text-xl font-extrabold text-blue-950">Rp {(getCartTotal() + 3000).toLocaleString("id-ID")}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Transfer...
+                        </div>
                       </div>
-                      
-                      {pakasirData.url && (
-                        <a href={pakasirData.url} target="_blank" className="text-blue-500 underline font-bold" rel="noreferrer">
-                          Buka Halaman Pembayaran
-                        </a>
-                      )}
-                      
-                      <p className="text-sm text-muted-foreground animate-pulse flex items-center gap-2 mt-4">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Pembayaran...
-                      </p>
                     </>
                   ) : (
                     <p className="text-base font-bold text-red-600 mb-4">Waktu Pembayaran Habis!</p>
                   )}
 
-                  {/* TOMBOL SIMULASI TEST */}
-                  <Button 
-                    onClick={async () => {
-                      if (pollingRef.current) clearInterval(pollingRef.current);
-                      try {
-                        await fetch('https://salapp-bendahara.web.id/api/doku/webhook', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            order: {
-                              invoice_number: pakasirData.orderId,
-                              amount: getCartTotal()
-                            },
-                            transaction: { status: 'SUCCESS' },
-                            channel: { id: paymentMethod.toUpperCase() }
-                          })
-                        });
-                      } catch (e) {}
-                      setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
-                      processCheckout(paymentMethod);
-                    }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold tracking-widest mt-2"
-                  >
-                    <CheckCircle2 className="w-5 h-5 mr-2" />
-                    SIMULASI LUNAS (TEST CALLBACK)
-                  </Button>
-
                   <Button variant="outline" className="w-full font-bold uppercase tracking-widest mt-2" onClick={() => { if(pollingRef.current) clearInterval(pollingRef.current); setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' }); }}>
-                    BATAL / KEMBALI
+                    BATAL / PILIH METODE LAIN
                   </Button>
                 </div>
               )}
