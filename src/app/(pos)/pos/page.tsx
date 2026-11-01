@@ -19,6 +19,19 @@ import { useSyncStore } from "@/store/useSyncStore";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/lib/supabase";
 
+export const getBankLogo = (method: string) => {
+  const m = (method || '').toLowerCase();
+  if (m.includes('bri')) return '/banks/bri.svg';
+  if (m.includes('bni')) return '/banks/bni.svg';
+  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.svg';
+  if (m.includes('cimb')) return '/banks/cimb.svg';
+  if (m.includes('danamon')) return '/banks/danamon.svg';
+  if (m.includes('permata')) return '/banks/permata.svg';
+  if (m.includes('mandiri')) return '/banks/mandiri.svg';
+  if (m.includes('qris')) return '/banks/qris.svg';
+  return null;
+};
+
 export const getBankDisplayName = (method: string) => {
   const map: Record<string, string> = {
     bri_va: 'BRI Virtual Account',
@@ -1415,19 +1428,24 @@ export default function PosPage() {
                     <span>BAYAR PAKAI TABUNGAN</span>
                     <Receipt className="w-6 h-6" />
                   </Button>
-                  <div className="h-16 rounded-md border border-slate-200 bg-slate-100 flex items-center justify-between px-6 opacity-60 cursor-not-allowed">
-                    <div className="flex flex-col text-left">
-                      <span className="text-base font-bold text-slate-500">BAYAR QRIS (DOKU)</span>
-                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded w-fit mt-0.5">Sedang Proses Verifikasi Akun DOKU</span>
+                  <div className="h-16 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between px-5 opacity-60 cursor-not-allowed">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0">
+                        <img src="/banks/qris.svg" alt="QRIS" className="w-full h-full object-contain opacity-50" />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="text-base font-bold text-slate-600">BAYAR QRIS</span>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded w-fit">Segera Hadir</span>
+                      </div>
                     </div>
-                    <QrCode className="w-6 h-6 text-slate-400" />
+                    <span className="text-xs text-slate-400 font-medium">Dalam Pemeliharaan</span>
                   </div>
                   <Button 
-                    className="h-16 text-lg font-bold flex justify-between px-6 bg-orange-600 hover:bg-orange-700 text-white border-orange-800" 
+                    className="h-16 text-lg font-bold flex justify-between px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm" 
                     onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
                     disabled={pakasirData.loading}
                   >
-                    <span>VIRTUAL ACCOUNT (DOKU)</span>
+                    <span>VIRTUAL ACCOUNT BANK</span>
                     <CreditCard className="w-6 h-6" />
                   </Button>
                 </>
@@ -1701,6 +1719,9 @@ export default function PosPage() {
 
                       {pakasirData.qrString && (
                         <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
+                          <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center mx-auto mb-2 shadow-xs">
+                            <img src={getBankLogo(paymentMethod) || '/banks/bri.svg'} alt="Bank" className="w-full h-full object-contain" />
+                          </div>
                           <p className="text-xs font-semibold text-steel uppercase mb-1">{getBankDisplayName(paymentMethod)}</p>
                           <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
                         </div>
