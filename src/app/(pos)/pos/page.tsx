@@ -43,16 +43,31 @@ export default function PosPage() {
   const user = useAuthStore(state => state.user);
 
   useEffect(() => {
-    const channel = supabase
+    const channelProduk = supabase
       .channel('realtime-produk-pos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'Produk' }, (payload) => {
-        // Invalidate cache immediately when Produk changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Produk' }, () => {
         queryClient.invalidateQueries({ queryKey: ['products'] });
       })
       .subscribe();
 
+    const channelConfig = supabase
+      .channel('realtime-config-pos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'MasterConfig' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['tabunganLimitConfig'] });
+      })
+      .subscribe();
+
+    const channelTabungan = supabase
+      .channel('realtime-tabungan-pos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Tabungan' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['tabunganMaster'] });
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelProduk);
+      supabase.removeChannel(channelConfig);
+      supabase.removeChannel(channelTabungan);
     };
   }, [queryClient]);
   
@@ -83,6 +98,9 @@ export default function PosPage() {
     isKamar?: boolean;
     hasPin?: boolean;
     message?: string;
+    limitJajan?: number;
+    sisaLimit?: number | null;
+    periodeLabel?: string;
     mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
   }>({ status: 'idle' });
 
@@ -107,7 +125,7 @@ export default function PosPage() {
         return null;
       }
     },
-    staleTime: 60 * 1000,
+    staleTime: 0,
   });
 
   const { pendingQueue, removePending } = useSyncStore();
@@ -331,16 +349,22 @@ export default function PosPage() {
 
           // Akun Dompet Kas Kamar tidak dikenakan limit jajan harian santri
           if (!isKamar) {
-            const override = limitConfigData?.santriLimits?.[sNis] || limitConfigData?.santriLimits?.[sNisClean];
+            let liveConfig = limitConfigData;
+            try {
+              const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+              if (cfgRow?.nilai) liveConfig = JSON.parse(cfgRow.nilai);
+            } catch (e) {}
+
+            const override = liveConfig?.santriLimits?.[sNis] || liveConfig?.santriLimits?.[sNisClean];
             if (override && override.limit !== undefined) {
               limitJajan = Number(override.limit);
               periode = override.periode || 'harian';
-            } else if (limitConfigData?.defaultLimit !== undefined && Number(limitConfigData.defaultLimit) > 0) {
-              limitJajan = Number(limitConfigData.defaultLimit);
-              periode = limitConfigData.defaultPeriode || 'harian';
+            } else if (liveConfig?.defaultLimit !== undefined && Number(liveConfig.defaultLimit) > 0) {
+              limitJajan = Number(liveConfig.defaultLimit);
+              periode = liveConfig.defaultPeriode || 'harian';
             } else {
               limitJajan = Number(foundSantri.limit_jajan_harian || 0);
-              periode = 'harian';
+              periode = foundSantri.limit_periode || liveConfig?.defaultPeriode || 'harian';
             }
 
             const now = new Date();
@@ -365,14 +389,30 @@ export default function PosPage() {
             }
           }
 
-          if (tabunganMasterData && Array.isArray(tabunganMasterData)) {
-            const foundTabunganRows = tabunganMasterData.filter((t: any) => 
+          let foundTabunganRows: any[] = [];
+          try {
+            const { data: directTab } = await supabase
+              .from('Tabungan')
+              .select('*')
+              .or(`nis.eq.${sNis},nis.eq.${sNisClean}`);
+            if (directTab && directTab.length > 0) {
+              foundTabunganRows = directTab;
+            }
+          } catch (e) {
+            console.warn("Direct Supabase fetch fallback:", e);
+          }
+
+          if (foundTabunganRows.length === 0 && tabunganMasterData && Array.isArray(tabunganMasterData)) {
+            foundTabunganRows = tabunganMasterData.filter((t: any) => 
               String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
             );
+          }
+
+          if (foundTabunganRows.length > 0) {
             saldo = foundTabunganRows.reduce((sum: number, t: any) => {
               const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
               const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
-              return jenis === 'tarik' ? sum - nom : sum + nom;
+              return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet' || jenis === 'debit') ? sum - nom : sum + nom;
             }, 0);
 
             // Hitung jajan pada periode berjalan jika ada limit (hanya transaksi jajan/kantin/pos)
@@ -395,10 +435,11 @@ export default function PosPage() {
             }
           }
 
+          const sisaLimitCalc = limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null;
           setBuyerData({ 
             nama: foundSantri.nama, 
             saldo: saldo, 
-            sisaLimit: limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null,
+            sisaLimit: sisaLimitCalc,
             periodeLabel: periodeLabel
           });
           setBuyerId(String(foundSantri.nis));
@@ -406,6 +447,11 @@ export default function PosPage() {
           if (saldo < getCartTotal()) {
             playError();
             showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
+          } else if (limitJajan > 0 && totalJajanPeriod >= limitJajan) {
+            playError();
+            showCheckoutAlert('error', `LIMIT ${periodeLabel.toUpperCase()} HABIS`, `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSudah Terpakai: Rp ${totalJajanPeriod.toLocaleString('id-ID')}\nSisa Limit: Rp 0`, foundSantri.nama);
+            setPendingBuyer(null);
+            setPinModalOpen(false);
           } else if (limitJajan > 0 && (totalJajanPeriod + getCartTotal() > limitJajan)) {
             playError();
             const sisaLimit = limitJajan - totalJajanPeriod;
@@ -480,19 +526,43 @@ export default function PosPage() {
 
         let saldo = 0;
         let recentMutasi: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }> = [];
+        let limitJajan = 0;
+        let periode = 'harian';
+        let periodeLabel = 'Hari Ini';
+        let totalJajanPeriod = 0;
 
-        if (currentTabunganList && Array.isArray(currentTabunganList)) {
-          const sNisClean = String(found.nis).replace(/^0+/, '');
-          const foundRows = currentTabunganList.filter((t: any) => 
+        const sNis = String(found.nis || '');
+        const sNisClean = sNis.replace(/^0+/, '');
+
+        let foundRows: any[] = [];
+        try {
+          const { data: directTab } = await supabase
+            .from('Tabungan')
+            .select('*')
+            .or(`nis.eq.${sNis},nis.eq.${sNisClean}`);
+          if (directTab && directTab.length > 0) foundRows = directTab;
+        } catch (e) {
+          console.warn("Direct Supabase query error in cek saldo:", e);
+        }
+
+        if (foundRows.length === 0 && currentTabunganList && Array.isArray(currentTabunganList)) {
+          foundRows = currentTabunganList.filter((t: any) => 
             String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
           );
+        }
+
+        if (foundRows.length > 0) {
           saldo = foundRows.reduce((sum: number, t: any) => {
             const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
             const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
-            return (jenis === 'tarik' || jenis === 'keluar') ? sum - nom : sum + nom;
+            return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet') ? sum - nom : sum + nom;
           }, 0);
 
-          const sortedRows = [...foundRows].reverse();
+          const sortedRows = [...foundRows].sort((a: any, b: any) => {
+            const dA = a.tanggal || a.Tanggal || '';
+            const dB = b.tanggal || b.Tanggal || '';
+            return dB.localeCompare(dA);
+          });
           recentMutasi = sortedRows.slice(0, 3).map((t: any) => ({
             tanggal: t.tanggal || t.Tanggal || '-',
             jenis: t.jenis || t.Jenis || 'Setor',
@@ -500,6 +570,65 @@ export default function PosPage() {
             keterangan: t.keterangan || t.Keterangan || ''
           }));
         }
+
+        // Hitung limit jajan untuk santri (bukan kas kamar)
+        if (!isKamar) {
+          let liveConfig = limitConfigData;
+          try {
+            const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+            if (cfgRow?.nilai) liveConfig = JSON.parse(cfgRow.nilai);
+          } catch (e) {}
+
+          const override = liveConfig?.santriLimits?.[sNis] || liveConfig?.santriLimits?.[sNisClean];
+          if (override && override.limit !== undefined) {
+            limitJajan = Number(override.limit);
+            periode = override.periode || 'harian';
+          } else if (liveConfig?.defaultLimit !== undefined && Number(liveConfig.defaultLimit) > 0) {
+            limitJajan = Number(liveConfig.defaultLimit);
+            periode = liveConfig.defaultPeriode || 'harian';
+          } else {
+            limitJajan = Number(found.limit_jajan_harian || 0);
+            periode = found.limit_periode || liveConfig?.defaultPeriode || 'harian';
+          }
+
+          const now = new Date();
+          const localYear = now.getFullYear();
+          const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+          const localDay = String(now.getDate()).padStart(2, '0');
+          let startDateStr = `${localYear}-${localMonth}-${localDay}`;
+
+          if (periode === 'mingguan') {
+            periodeLabel = 'Minggu Ini';
+            const d = new Date(now);
+            const day = d.getDay();
+            const diff = (day === 0 ? -6 : 1) - day;
+            d.setDate(d.getDate() + diff);
+            startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } else if (periode === 'bulanan') {
+            periodeLabel = 'Bulan Ini';
+            startDateStr = `${localYear}-${localMonth}-01`;
+          }
+
+          if (limitJajan > 0 && foundRows.length > 0) {
+            totalJajanPeriod = foundRows.reduce((sum: number, t: any) => {
+              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase().trim();
+              const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
+              const tgl = String(rawDate).split('T')[0];
+              const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
+              
+              const isWithdraw = jenis === 'tarik' || jenis === 'keluar' || jenis.includes('tarik') || jenis.includes('keluar') || jenis === 'debet' || jenis === 'debit';
+              const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
+
+              if (isWithdraw && isJajan && tgl >= startDateStr) {
+                return sum + nom;
+              }
+              return sum;
+            }, 0);
+          }
+        }
+
+        const sisaLimitCalc = limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null;
 
         setModalCekSaldoData({
           status: 'success',
@@ -509,6 +638,9 @@ export default function PosPage() {
           saldo: saldo,
           isKamar: isKamar,
           hasPin: !!found.pin,
+          limitJajan: limitJajan,
+          sisaLimit: sisaLimitCalc,
+          periodeLabel: periodeLabel,
           mutasi: recentMutasi
         });
         playDing();
@@ -1413,8 +1545,12 @@ export default function PosPage() {
                       {buyerData.saldo < getCartTotal() && (
                         <p className="text-sm mt-2 font-bold text-red-600">SALDO TIDAK MENCUKUPI!</p>
                       )}
-                      {(buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit < getCartTotal()) && (
-                        <p className="text-sm mt-2 font-bold text-red-600">MELEBIHI LIMIT TABUNGAN ({buyerData.periodeLabel ? buyerData.periodeLabel.toUpperCase() : 'HARI INI'})!</p>
+                      {(buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit <= 0) ? (
+                        <p className="text-sm mt-2 font-black text-red-600 bg-red-200/60 dark:bg-red-950/60 p-2 rounded-lg">
+                          LIMIT {buyerData.periodeLabel ? buyerData.periodeLabel.toUpperCase() : 'HARI INI'} TELAH HABIS (Rp 0)!
+                        </p>
+                      ) : (buyerData.sisaLimit !== null && buyerData.sisaLimit !== undefined && buyerData.sisaLimit < getCartTotal()) && (
+                        <p className="text-sm mt-2 font-bold text-red-600">MELEBIHI SISA LIMIT TABUNGAN ({buyerData.periodeLabel ? buyerData.periodeLabel.toUpperCase() : 'HARI INI'})!</p>
                       )}
                     </div>
                   ) : (
@@ -2156,6 +2292,38 @@ export default function PosPage() {
                       Rp {(modalCekSaldoData.saldo || 0).toLocaleString('id-ID')}
                     </p>
                   </div>
+
+                  {!modalCekSaldoData.isKamar && modalCekSaldoData.limitJajan !== undefined && (
+                    <div className={`p-3 rounded-xl border-2 font-mono text-xs ${
+                      modalCekSaldoData.limitJajan === 0 
+                        ? 'bg-slate-100/70 border-slate-200 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300'
+                        : (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                          ? 'bg-rose-100/80 border-rose-400 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-amber-100/70 border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                    }`}>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="uppercase flex items-center gap-1.5">
+                          <Wallet className="w-3.5 h-3.5" /> Limit Jajan ({modalCekSaldoData.periodeLabel || 'Hari Ini'}):
+                        </span>
+                        <span>{modalCekSaldoData.limitJajan > 0 ? `Rp ${modalCekSaldoData.limitJajan.toLocaleString('id-ID')}` : 'Bebas (Tanpa Limit)'}</span>
+                      </div>
+                      {modalCekSaldoData.limitJajan > 0 && (
+                        <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-border/40 font-bold">
+                          <span>Sisa Limit Tersedia:</span>
+                          <span className={`text-sm ${
+                            (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                              ? 'text-rose-600 dark:text-rose-400 font-black'
+                              : 'text-emerald-700 dark:text-emerald-400 font-black'
+                          }`}>
+                            {(modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                              ? 'HABIS (Rp 0)'
+                              : `Rp ${(modalCekSaldoData.sisaLimit || 0).toLocaleString('id-ID')}`
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {modalCekSaldoData.mutasi && modalCekSaldoData.mutasi.length > 0 && (
                     <div className="pt-2 border-t-2 border-border/40 space-y-1.5">

@@ -461,7 +461,7 @@ export const supabaseServices = {
         periode = limitConfig.defaultPeriode || 'harian';
       } else {
         limit = Number(santri?.limit_jajan_harian || 0);
-        periode = 'harian';
+        periode = (santri as any)?.limit_periode || limitConfig?.defaultPeriode || 'harian';
       }
 
       if (limit > 0) {
