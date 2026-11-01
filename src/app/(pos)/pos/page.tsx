@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,14 +39,12 @@ export const getBankDisplayName = (method: string) => {
     bsi_va: 'BSI Virtual Account',
     cimb_niaga_va: 'CIMB Niaga VA',
     danamon_va: 'Danamon VA',
-    muamalat_va: 'Muamalat VA',
-    ocbc_va: 'OCBC VA',
-    maybank_va: 'Maybank VA',
-    bnc_va: 'Bank Neo Commerce (BNC)',
+    permata_va: 'Bank Permata VA',
+    mandiri_va: 'Mandiri Virtual Account',
     qris: 'QRIS',
     payment_link: 'Payment Link'
   };
-  return map[method] || method.replace('_va', ' VA').toUpperCase();
+  return map[method] || String(method || '').replace('_va', ' VA').toUpperCase();
 };
 
 export default function PosPage() {
@@ -805,7 +803,7 @@ export default function PosPage() {
     setShowTempPrint(true);
   };
 
-  const pollPakasirStatus = (orderId: string, amount: number) => {
+  const pollPakasirStatus = (orderId: string, amount: number, currentMethod: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     
     pollingRef.current = setInterval(async () => {
@@ -821,7 +819,7 @@ export default function PosPage() {
           setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
           
           // Auto checkout
-          await processCheckout(paymentMethod);
+          await processCheckout(getBankDisplayName(currentMethod) || currentMethod);
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -830,7 +828,8 @@ export default function PosPage() {
   };
 
   const generatePakasir = async (type: string) => {
-    setPakasirData(prev => ({ ...prev, loading: true }));
+    setPaymentMethod(type);
+    setPakasirData(prev => ({ ...prev, loading: true, step: 'LOADING' }));
     try {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const cartTotal = getCartTotal();
@@ -839,7 +838,7 @@ export default function PosPage() {
 
       if (type !== 'qris' && amount < 10000) {
         toast.error("Pembayaran Virtual Account minimal Rp 10.000. Untuk total di bawah Rp 10.000 silakan pilih QRIS.");
-        setPakasirData(prev => ({ ...prev, loading: false }));
+        setPakasirData(prev => ({ ...prev, loading: false, step: 'CHOOSE_VA' }));
         return;
       }
 
@@ -875,14 +874,14 @@ export default function PosPage() {
           isSandbox: false,
           orderId
         });
-        pollPakasirStatus(orderId, amount);
+        pollPakasirStatus(orderId, amount, type);
       } else {
         toast.error(res?.message || "Gagal memproses pembayaran DOKU");
-        setPakasirData(prev => ({ ...prev, loading: false }));
+        setPakasirData(prev => ({ ...prev, loading: false, step: 'CHOOSE_VA' }));
       }
     } catch (err: any) {
       toast.error(err.message || "Gagal menghubungi server DOKU");
-      setPakasirData(prev => ({ ...prev, loading: false }));
+      setPakasirData(prev => ({ ...prev, loading: false, step: 'CHOOSE_VA' }));
     }
   };
 
@@ -1445,37 +1444,53 @@ export default function PosPage() {
               )}
 
               {pakasirData.step === 'CHOOSE_VA' && (
-                <div className="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2">
-                  <div className="flex items-center justify-between mb-2 border-b border-border pb-2">
-                    <h3 className="font-bold text-lg">Pilih Bank VA</h3>
+                <div className="flex flex-col gap-2.5 max-h-[28rem] overflow-y-auto pr-1">
+                  <div className="flex items-center justify-between mb-1 border-b border-border pb-2">
+                    <div>
+                      <h3 className="font-bold text-base text-foreground">Pilih Bank Virtual Account</h3>
+                      <p className="text-xs text-muted-foreground">Verifikasi pembayaran otomatis 24 jam</p>
+                    </div>
                     <Button variant="ghost" size="sm" onClick={() => setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' })}>Kembali</Button>
                   </div>
                   
                   {[
-                    { id: 'bri_va', name: 'BRI Virtual Account', color: 'text-blue-700' },
-                    { id: 'bni_va', name: 'BNI Virtual Account', color: 'text-orange-600' },
-                    { id: 'bsi_va', name: 'BSI Virtual Account', color: 'text-emerald-600' },
-                    { id: 'cimb_niaga_va', name: 'CIMB Niaga VA', color: 'text-red-600' },
-                    { id: 'danamon_va', name: 'Danamon VA', color: 'text-amber-600' },
-                    { id: 'muamalat_va', name: 'Muamalat VA', color: 'text-purple-600' },
-                    { id: 'ocbc_va', name: 'OCBC VA', color: 'text-rose-600' },
-                    { id: 'maybank_va', name: 'Maybank VA', color: 'text-yellow-600' },
-                    { id: 'bnc_va', name: 'Bank Neo Commerce (BNC)', color: 'text-slate-600' }
+                    { id: 'bri_va', name: 'Bank BRI', logo: '/banks/bri.png' },
+                    { id: 'bni_va', name: 'Bank BNI', logo: '/banks/bni.png' },
+                    { id: 'bsi_va', name: 'Bank Syariah Indonesia (BSI)', logo: '/banks/bsi.png' },
+                    { id: 'cimb_niaga_va', name: 'Bank CIMB Niaga', logo: '/banks/cimb.png' },
+                    { id: 'danamon_va', name: 'Bank Danamon', logo: '/banks/danamon.png' },
+                    { id: 'permata_va', name: 'Bank Permata', logo: '/banks/permata.png' }
                   ].map((bank) => (
-                    <Button 
+                    <button 
                       key={bank.id}
-                      variant="outline" 
-                      className="h-14 text-md font-bold flex justify-between px-4 border-2 hover:bg-slate-50"
-                      onClick={() => generatePakasir(bank.id)}
+                      type="button"
+                      className="w-full flex items-center justify-between p-3.5 border border-border rounded-xl hover:bg-accent/10 hover:border-blue-500 transition-all text-left bg-card shadow-xs group"
+                      onClick={() => {
+                        setPaymentMethod(bank.id);
+                        generatePakasir(bank.id);
+                      }}
                       disabled={pakasirData.loading}
                     >
-                      <div className="flex items-center gap-3">
-                        <CreditCard className={`w-5 h-5 ${bank.color}`} />
-                        <span>{bank.name}</span>
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-xs">
+                          <img src={bank.logo} alt={bank.name} className="w-full h-full object-contain" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-foreground text-sm block group-hover:text-blue-600 transition-colors">{bank.name}</span>
+                          <span className="text-[11px] text-muted-foreground">Virtual Account Otomatis</span>
+                        </div>
                       </div>
-                      <ArrowUpRight className="w-4 h-4 text-slate-400" />
-                    </Button>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
+                    </button>
                   ))}
+                </div>
+              )}
+
+              {pakasirData.step === 'LOADING' && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin mb-4" />
+                  <p className="font-bold text-foreground text-sm uppercase tracking-wider">Menyiapkan Virtual Account...</p>
+                  <p className="text-xs text-muted-foreground mt-1">Menghubungi gateway perbankan DOKU</p>
                 </div>
               )}
 
