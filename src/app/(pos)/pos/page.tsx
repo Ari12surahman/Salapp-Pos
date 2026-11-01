@@ -21,14 +21,14 @@ import { supabase } from "@/lib/supabase";
 
 export const getBankLogo = (method: string) => {
   const m = (method || '').toLowerCase();
-  if (m.includes('bri')) return '/banks/bri.svg';
-  if (m.includes('bni')) return '/banks/bni.svg';
-  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.svg';
-  if (m.includes('cimb')) return '/banks/cimb.svg';
-  if (m.includes('danamon')) return '/banks/danamon.svg';
-  if (m.includes('permata')) return '/banks/permata.svg';
-  if (m.includes('mandiri')) return '/banks/mandiri.svg';
-  if (m.includes('qris')) return '/banks/qris.svg';
+  if (m.includes('bri')) return '/banks/bri.png';
+  if (m.includes('bni')) return '/banks/bni.png';
+  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.png';
+  if (m.includes('cimb')) return '/banks/cimb.png';
+  if (m.includes('danamon')) return '/banks/danamon.png';
+  if (m.includes('permata')) return '/banks/permata.png';
+  if (m.includes('mandiri')) return '/banks/mandiri.png';
+  if (m.includes('qris')) return '/banks/qris.png';
   return null;
 };
 
@@ -1431,7 +1431,7 @@ export default function PosPage() {
                   <div className="h-16 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between px-5 opacity-60 cursor-not-allowed">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0">
-                        <img src="/banks/qris.svg" alt="QRIS" className="w-full h-full object-contain opacity-50" />
+                        <img src="/banks/qris.png" alt="QRIS" className="w-full h-full object-contain opacity-50" />
                       </div>
                       <div className="flex flex-col text-left">
                         <span className="text-base font-bold text-slate-600">BAYAR QRIS</span>
@@ -1720,7 +1720,7 @@ export default function PosPage() {
                       {pakasirData.qrString && (
                         <div className="w-full bg-canvas border border-whisper rounded-xl p-6">
                           <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center mx-auto mb-2 shadow-xs">
-                            <img src={getBankLogo(paymentMethod) || '/banks/bri.svg'} alt="Bank" className="w-full h-full object-contain" />
+                            <img src={getBankLogo(paymentMethod) || '/banks/bri.png'} alt="Bank" className="w-full h-full object-contain" />
                           </div>
                           <p className="text-xs font-semibold text-steel uppercase mb-1">{getBankDisplayName(paymentMethod)}</p>
                           <div className="text-3xl font-mono font-bold text-ink tracking-wider break-all">{pakasirData.qrString}</div>
