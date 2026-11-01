@@ -71,7 +71,7 @@ export default function PencairanPage() {
   });
 
   const ajukanMutation = useMutation({
-    mutationFn: (payload: { warungId: string, trxIds: string[], totalDana: number }) => 
+    mutationFn: (payload: any) => 
       api.post('ajukanPencairan', payload).then(res => {
         if (res.status === 'error') throw new Error(res.message);
         return res;
@@ -127,8 +127,60 @@ export default function PencairanPage() {
     }
   };
 
-  // Hitung akumulasi yang sudah dibayarkan di bulan ini
-  Object.values(feeHistory).forEach((h: any) => {
+  // Helper untuk mendapatkan / mengestimasi rincian potongan untuk pengajuan apapun (termasuk yang status Menunggu)
+  const getPencairanDeduction = (item: any) => {
+    if (!item) return null;
+    const idp = item.idpencairan || item.IDPencairan;
+    if (feeHistory[idp]) return feeHistory[idp];
+
+    const totalKotor = Number(item.totaldana || item.TotalDana || 0);
+    const tgl = item.waktupengajuan || item.WaktuPengajuan || '';
+    const itemPeriode = tgl ? tgl.slice(0, 7) : currentPeriodeBulan;
+    const mulaiPeriode = feeConfig.mulaiPeriode || '2026-11';
+
+    if (itemPeriode >= mulaiPeriode && totalKotor > 0) {
+      const wId = String(item.warungid || item.WarungID || activeWarungId);
+      const cWarung = feeConfig?.warungConfig?.[wId] || {};
+      const tAplikasi = cWarung?.biayaAplikasi !== undefined ? Number(cWarung.biayaAplikasi) : Number(feeConfig.biayaAplikasi ?? 30000);
+      const tKader = cWarung?.biayaKader !== undefined ? Number(cWarung.biayaKader) : Number(feeConfig.biayaKader ?? 200000);
+      const maxPersen = Number(feeConfig.maxPotongPersen ?? 50);
+      const maxPotong = Math.floor(totalKotor * (maxPersen / 100));
+
+      const potKader = Math.min(tKader, maxPotong);
+      const potAplikasi = Math.min(tAplikasi, Math.max(0, maxPotong - potKader));
+      const totPot = potKader + potAplikasi;
+      const totBersih = Math.max(0, totalKotor - totPot);
+
+      return {
+        idPencairan: idp,
+        warungId: wId,
+        warungName: activeWarungName,
+        periodeBulan: itemPeriode,
+        totalKotor: totalKotor,
+        potonganKader: potKader,
+        potonganAplikasi: potAplikasi,
+        totalPotongan: totPot,
+        totalBersih: totBersih,
+        sisaKaderSetelah: Math.max(0, tKader - potKader),
+        sisaAplikasiSetelah: Math.max(0, tAplikasi - potAplikasi),
+        waktuPengajuan: tgl,
+        status: item.status || item.Status || 'Menunggu'
+      };
+    }
+    return null;
+  };
+
+  // Hitung akumulasi yang sudah dibayarkan / diajukan di bulan ini
+  const combinedFeeHistory: Record<string, any> = { ...feeHistory };
+  riwayatList.forEach((r: any) => {
+    const idp = r.idpencairan || r.IDPencairan;
+    if (!combinedFeeHistory[idp]) {
+      const autoCalc = getPencairanDeduction(r);
+      if (autoCalc) combinedFeeHistory[idp] = autoCalc;
+    }
+  });
+
+  Object.values(combinedFeeHistory).forEach((h: any) => {
     if (String(h.warungId) === String(activeWarungId) && h.periodeBulan === currentPeriodeBulan) {
       terbayarAplikasi += Number(h.potonganAplikasi || 0);
       terbayarKader += Number(h.potonganKader || 0);
@@ -184,8 +236,16 @@ export default function PencairanPage() {
     if (confirmed) {
       ajukanMutation.mutate({
         warungId: activeWarungId,
+        warungName: activeWarungName,
         trxIds: trxIds,
-        totalDana: totalDanaEligible
+        totalDana: totalDanaEligible,
+        periodeBulan: currentPeriodeBulan,
+        potonganKader: estPotongKader,
+        potonganAplikasi: estPotongAplikasi,
+        totalPotongan: estTotalPotongan,
+        totalBersih: estDanaBersih,
+        sisaKaderSetelah: Math.max(0, sisaKader - estPotongKader),
+        sisaAplikasiSetelah: Math.max(0, sisaAplikasi - estPotongAplikasi)
       });
     }
   };
@@ -458,7 +518,8 @@ Terima kasih atas kerja samanya.
                 const idpencairan = item.idpencairan || item.IDPencairan;
                 const waktupengajuan = item.waktupengajuan || item.WaktuPengajuan;
                 const waktuselesai = item.waktuselesai || item.WaktuSelesai;
-                const hist = feeHistory[idpencairan];
+                const hist = getPencairanDeduction(item);
+                const isPending = status === 'Menunggu';
                 
                 return (
                   <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-4 border rounded-xl hover:bg-muted/40 transition-colors">
@@ -470,13 +531,20 @@ Terima kasih atas kerja samanya.
                               Rp {Number(hist.totalBersih || 0).toLocaleString('id-ID')}
                             </span>
                             <span className="text-[11px] text-muted-foreground font-mono">
-                              Kotor: Rp {totaldana.toLocaleString('id-ID')} • Potong: {hist.potonganKader ? `Kader -Rp ${Number(hist.potonganKader).toLocaleString('id-ID')}` : ''} {hist.potonganAplikasi ? `Aplikasi -Rp ${Number(hist.potonganAplikasi).toLocaleString('id-ID')}` : ''}
+                              Kotor: Rp {totaldana.toLocaleString('id-ID')} • Potong Tagihan: -Rp {Number(hist.totalPotongan || 0).toLocaleString('id-ID')}
+                              {Number(hist.potonganKader || 0) > 0 ? ` (Kader -Rp ${Number(hist.potonganKader).toLocaleString('id-ID')}` : ''}
+                              {Number(hist.potonganAplikasi || 0) > 0 ? `${Number(hist.potonganKader || 0) > 0 ? ', ' : ' ('}Aplikasi -Rp ${Number(hist.potonganAplikasi).toLocaleString('id-ID')})` : Number(hist.potonganKader || 0) > 0 ? ')' : ''}
                             </span>
+                            {isPending && (
+                              <span className="text-[11px] text-amber-600 font-mono mt-0.5">
+                                Menunggu verifikasi & transfer Bendahara
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col">
                             <span className="font-bold text-lg">Rp {totaldana.toLocaleString('id-ID')}</span>
-                            {status === 'Menunggu' && (
+                            {isPending && (
                               <span className="text-[11px] text-amber-600 font-mono">
                                 Menunggu verifikasi & transfer Bendahara
                               </span>
@@ -595,24 +663,26 @@ Terima kasih atas kerja samanya.
                     )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status:</span>
-                      <span className="font-bold uppercase text-emerald-700">{item.status || item.Status}</span>
+                      <span className={`font-bold uppercase ${item.status === 'Selesai' || item.Status === 'Selesai' ? 'text-emerald-700' : 'text-amber-600'}`}>
+                        {item.status === 'Selesai' || item.Status === 'Selesai' ? 'SELESAI (SUDAH DITRANSFER)' : 'MENUNGGU VERIFIKASI BENDAHARA'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="space-y-1.5 border-b border-dashed border-gray-400 pb-2 mb-2">
                     <div className="flex justify-between text-[11px]">
-                      <span>Penjualan Kotor</span>
+                      <span>Penjualan Non-Tunai (Kotor)</span>
                       <span className="font-bold">Rp {totaldana.toLocaleString('id-ID')}</span>
                     </div>
                     {potKader > 0 && (
                       <div className="flex justify-between text-[11px] text-rose-700">
-                        <span>Tagihan Kader</span>
+                        <span>Potongan Tagihan Kader</span>
                         <span className="font-semibold">-Rp {potKader.toLocaleString('id-ID')}</span>
                       </div>
                     )}
                     {potAplikasi > 0 && (
                       <div className="flex justify-between text-[11px] text-rose-700">
-                        <span>Tagihan Aplikasi</span>
+                        <span>Potongan Tagihan Aplikasi</span>
                         <span className="font-semibold">-Rp {potAplikasi.toLocaleString('id-ID')}</span>
                       </div>
                     )}
@@ -626,7 +696,7 @@ Terima kasih atas kerja samanya.
 
                   {/* Bersih Diterima */}
                   <div className="flex justify-between items-center font-black text-sm mb-2 pt-1 border-b border-dashed border-black pb-2">
-                    <span>BERSIH DITERIMA</span>
+                    <span>{item.status === 'Selesai' || item.Status === 'Selesai' ? 'BERSIH DITERIMA' : 'ESTIMASI BERSIH DITERIMA'}</span>
                     <span className="text-base text-emerald-700">Rp {totalBersih.toLocaleString('id-ID')}</span>
                   </div>
 

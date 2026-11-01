@@ -38,7 +38,7 @@ export const supabaseServices = {
     if (error) return { status: 'error', message: error.message };
     return { status: 'success', data: mapKeysToLower(data) };
   },
-  
+
   getProduk: async (param?: any) => {
     const warungId = typeof param === 'string' ? param : (param?.warungId || undefined);
 
@@ -63,7 +63,7 @@ export const supabaseServices = {
         .select('*')
         .order('ID', { ascending: false })
         .range(from, from + step - 1);
-      
+
       if (error) {
         if (allData.length > 0) break;
         return { status: 'error', message: error.message };
@@ -116,7 +116,7 @@ export const supabaseServices = {
 
   getDashboard: async (payload: any) => {
     const warungId = payload?.warungId;
-    
+
     // 1. Fetch Transaksi (Sort by Waktu DESC)
     let trxQuery = supabase.from('Transaksi').select('*').order('Waktu', { ascending: false });
     if (warungId && warungId !== 'ALL') trxQuery = trxQuery.eq('WarungID', warungId);
@@ -292,20 +292,20 @@ export const supabaseServices = {
     if (error) return { status: 'error', message: error.message };
     return { status: 'success', id: newId };
   },
-  
+
   login: async (payload: any) => {
     const cleanUsername = payload.username.trim();
-    
+
     // 1. Fetch User Profile from public.Users first to get the correct Email
     const { data, error } = await supabase.from('Users').select('*').ilike('Username', cleanUsername);
-    
+
     if (error || !data || data.length === 0) {
       console.error("Profile Fetch Error:", error || "User not found in public.Users");
       return { status: 'error', message: "Username tidak ditemukan." };
     }
-    
+
     const userRow = data[0];
-    
+
     // Determine actual email for auth
     const fallbackNew = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.com`;
     const fallbackOld = `${cleanUsername.toLowerCase().replace(/\s/g, '')}@sistemkeuangan.local`;
@@ -316,7 +316,7 @@ export const supabaseServices = {
       email: actualEmail,
       password: payload.password,
     });
-    
+
     if (authError || !authData.user) {
       // Fallback for older accounts
       const { data: fallbackData, error: fallbackError } = await supabase.auth.signInWithPassword({
@@ -330,19 +330,19 @@ export const supabaseServices = {
       }
       authData = fallbackData;
     }
-    
+
     // 3. Fetch permissions from Roles
     let permissions = "pos"; // default
     if (userRow.Role) {
       const { data: roleData } = await supabase.from('Roles').select('Permissions').ilike('RoleName', userRow.Role);
       if (roleData && roleData.length > 0) permissions = roleData[0].Permissions;
     }
-    
+
     const userObj = mapKeysToLower([userRow])[0];
     userObj.permissions = permissions;
     // Fix case issue for warungId since Zustand expects camelCase
     userObj.warungId = userObj.warungid;
-    
+
     return {
       status: "success",
       user: userObj
@@ -352,10 +352,10 @@ export const supabaseServices = {
   getPesananOnline: async (payload: any) => {
     let q = supabase.from('Transaksi').select('*').eq('Metode', 'Pesanan Online');
     if (payload?.warungId && payload.warungId !== 'ALL') q = q.eq('WarungID', payload.warungId);
-    
+
     const { data, error } = await q;
     if (error) return { status: 'error', message: error.message };
-    
+
     const orders = mapKeysToLower(data || []);
     if (orders.length > 0) {
       const trxIds = orders.map((o: any) => o.trxid);
@@ -373,7 +373,7 @@ export const supabaseServices = {
         });
       }
     }
-    
+
     return { status: 'success', data: orders };
   },
 
@@ -444,7 +444,7 @@ export const supabaseServices = {
       let limitConfig: any = null;
       try {
         if (configRow?.nilai) limitConfig = JSON.parse(configRow.nilai);
-      } catch (e) {}
+      } catch (e) { }
 
       const sNis = String(payload.santriId);
       const sNisClean = sNis.replace(/^0+/, '');
@@ -500,9 +500,9 @@ export const supabaseServices = {
 
         if (totalJajanPeriod + payload.total > limit) {
           const sisa = limit - totalJajanPeriod;
-          return { 
-            status: 'error', 
-            message: `Transaksi ditolak: Melebihi limit tabungan ${periodeLabel.toLowerCase()}. Sisa limit: Rp ${(sisa > 0 ? sisa : 0).toLocaleString('id-ID')}` 
+          return {
+            status: 'error',
+            message: `Transaksi ditolak: Melebihi limit tabungan ${periodeLabel.toLowerCase()}. Sisa limit: Rp ${(sisa > 0 ? sisa : 0).toLocaleString('id-ID')}`
           };
         }
       }
@@ -540,16 +540,16 @@ export const supabaseServices = {
     // Trigger Notification to Wali
     if (payload.santriId) {
       try {
-        const itemNames = payload.items && payload.items.length > 0 
-          ? payload.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ') 
+        const itemNames = payload.items && payload.items.length > 0
+          ? payload.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ')
           : 'beberapa jajanan';
         fetch('https://sal-app-admin.vercel.app/api/notifikasi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            nis: payload.santriId, 
-            title: 'Info Jajan Kantin', 
-            body: `Ananda ${payload.buyerName || 'Santri'} baru saja jajan di kantin berupa ${itemNames} senilai Rp ${Number(payload.total).toLocaleString('id-ID')} menggunakan ${payload.method || 'Tunai'}.` 
+          body: JSON.stringify({
+            nis: payload.santriId,
+            title: 'Info Jajan Kantin',
+            body: `Ananda ${payload.buyerName || 'Santri'} baru saja jajan di kantin berupa ${itemNames} senilai Rp ${Number(payload.total).toLocaleString('id-ID')} menggunakan ${payload.method || 'Tunai'}.`
           })
         }).catch(e => console.log('Push notif error:', e));
       } catch (e) {
@@ -580,6 +580,42 @@ export const supabaseServices = {
       IDPencairan: idPencairan, WarungID: payload.warungId, WaktuPengajuan: new Date().toISOString(), TotalDana: payload.totalDana, Status: "Menunggu"
     });
     await supabase.from('Transaksi').update({ StatusPencairan: 'Sedang Diajukan', IDPencairan: idPencairan }).in('TrxID', payload.trxIds);
+
+    // Langsung simpan rincian potongan ke MasterConfig.pencairanFeeHistory
+    if (payload.totalPotongan !== undefined) {
+      try {
+        const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'pencairanFeeHistory').maybeSingle();
+        let historyObj: any = {};
+        if (cfgRow?.nilai) {
+          try {
+            historyObj = typeof cfgRow.nilai === 'string' ? JSON.parse(cfgRow.nilai) : cfgRow.nilai;
+          } catch {}
+        }
+        const nowIso = new Date().toISOString();
+        historyObj[idPencairan] = {
+          idPencairan: idPencairan,
+          warungId: payload.warungId,
+          warungName: payload.warungName || 'Warung',
+          periodeBulan: payload.periodeBulan || nowIso.slice(0, 7),
+          totalKotor: Number(payload.totalDana || 0),
+          potonganAplikasi: Number(payload.potonganAplikasi || 0),
+          potonganKader: Number(payload.potonganKader || 0),
+          totalPotongan: Number(payload.totalPotongan || 0),
+          totalBersih: Number(payload.totalBersih || (payload.totalDana - (payload.totalPotongan || 0))),
+          sisaAplikasiSetelah: Number(payload.sisaAplikasiSetelah || 0),
+          sisaKaderSetelah: Number(payload.sisaKaderSetelah || 0),
+          waktuPengajuan: nowIso,
+          status: 'Menunggu'
+        };
+
+        await supabase.from('MasterConfig').upsert({
+          kunci: 'pencairanFeeHistory',
+          nilai: JSON.stringify(historyObj)
+        }, { onConflict: 'kunci' });
+      } catch (err) {
+        console.warn("Gagal menyimpan snapshot pencairanFeeHistory:", err);
+      }
+    }
     return { status: 'success' };
   },
   simpanPengaturan: async (payload: any) => {
@@ -650,7 +686,7 @@ export const supabaseServices = {
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };
   },
-  
+
   // Kas Warung API
   getKasWarung: async (payload: any) => {
     const warungId = payload?.warungId;
