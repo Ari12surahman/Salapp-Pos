@@ -849,7 +849,7 @@ export default function PosPage() {
           loading: false,
           isPaid: false,
           checkoutUrl,
-          isSandbox: true,
+          isSandbox: false,
           orderId
         });
         pollPakasirStatus(orderId, amount);
@@ -1415,14 +1415,13 @@ export default function PosPage() {
                     <span>BAYAR PAKAI TABUNGAN</span>
                     <Receipt className="w-6 h-6" />
                   </Button>
-                  <Button 
-                    className="h-16 text-lg font-bold flex justify-between px-6 bg-blue-600 hover:bg-blue-700 text-white border-blue-800" 
-                    onClick={() => { setPaymentMethod('QRIS'); generatePakasir('qris'); }}
-                    disabled={pakasirData.loading}
-                  >
-                    <span>{pakasirData.loading && paymentMethod === 'QRIS' ? "MEMPROSES DOKU..." : "BAYAR QRIS (DOKU)"}</span>
-                    <QrCode className="w-6 h-6" />
-                  </Button>
+                  <div className="h-16 rounded-md border border-slate-200 bg-slate-100 flex items-center justify-between px-6 opacity-60 cursor-not-allowed">
+                    <div className="flex flex-col text-left">
+                      <span className="text-base font-bold text-slate-500">BAYAR QRIS (DOKU)</span>
+                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded w-fit mt-0.5">Sedang Proses Verifikasi Akun DOKU</span>
+                    </div>
+                    <QrCode className="w-6 h-6 text-slate-400" />
+                  </div>
                   <Button 
                     className="h-16 text-lg font-bold flex justify-between px-6 bg-orange-600 hover:bg-orange-700 text-white border-orange-800" 
                     onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
