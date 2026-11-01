@@ -270,6 +270,7 @@ export default function PosPage() {
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
   const productsRef = useRef<any[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     productsRef.current = products;
@@ -277,6 +278,13 @@ export default function PosPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
       // Abaikan jika user sedang mengetik di dalam input/textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
@@ -998,19 +1006,22 @@ export default function PosPage() {
       {/* LEFT & CENTER: PRODUCTS SECTION */}
       <div className="flex-1 flex flex-col bg-background border-r border-border min-w-0 print:hidden">
         {/* Topbar POS */}
-        <header className="h-14 border-b border-border flex items-center px-2 lg:px-4 justify-between bg-card gap-2">
+        <header className="h-14 border-b border-border flex items-center px-2 lg:px-4 justify-between bg-card gap-2 sm:gap-4">
           <div className="flex items-center gap-2 lg:gap-4 shrink-0">
-            <Link href="/" className="p-2 border border-border hover:bg-accent hover:text-accent-foreground transition-colors rounded-md">
+            <Link href="/" className="p-2 border border-border hover:bg-accent hover:text-accent-foreground transition-colors rounded-md" title="Kembali ke Menu Utama">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="font-black text-lg lg:text-xl tracking-tighter uppercase hidden sm:block">TERMINAL KASIR</h1>
+            <h1 className="font-black text-lg lg:text-xl tracking-tighter uppercase hidden sm:block whitespace-nowrap">TERMINAL KASIR</h1>
           </div>
-          <div className="flex items-center gap-2 flex-1 lg:max-w-md justify-end">
-            <div className="relative w-full max-w-xs lg:max-w-none">
+
+          {/* SEARCH BAR (Lebar & Responsif ke seluruh sisa header) */}
+          <div className="flex-1 max-w-3xl min-w-0 mx-1 sm:mx-2">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
-                placeholder="Scan Barcode / Cari (F2)" 
-                className="pl-9 pr-9 bg-background uppercase font-mono"
+                ref={searchInputRef}
+                placeholder="Scan Barcode / Cari Produk (F2)..." 
+                className="pl-9 pr-9 bg-background uppercase font-mono w-full h-10 shadow-sm text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -1061,12 +1072,17 @@ export default function PosPage() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-primary"
                 onClick={() => setScannerOpen({ isOpen: true, target: 'product' })}
+                title="Buka Kamera Scanner Barcode"
               >
                 <Camera className="w-4 h-4" />
               </Button>
             </div>
+          </div>
+
+          {/* ACTION BUTTONS */}
+          <div className="flex items-center gap-2 shrink-0">
             <Button 
               variant="outline" 
               size="icon" 
@@ -1078,43 +1094,18 @@ export default function PosPage() {
                 toast.info("Menyinkronkan data terbaru...");
               }}
               disabled={isFetchingProducts || isFetchingSantri || isFetchingTabungan}
+              title="Sinkronkan Data Produk & Saldo"
             >
               <RefreshCw className={`w-4 h-4 ${isFetchingProducts || isFetchingSantri || isFetchingTabungan ? "animate-spin" : ""}`} />
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setModalCekSaldoOpen(true);
-                setModalCekSaldoData({ status: 'idle' });
-                setModalCekSaldoInput('');
-              }} 
-              className="font-bold hidden sm:flex items-center gap-1.5 border-emerald-600/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              title="Cek Saldo Santri / Kas Kamar"
-            >
-              <Wallet className="w-4 h-4 text-emerald-600" />
-              <span>CEK SALDO</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => {
-                setModalCekSaldoOpen(true);
-                setModalCekSaldoData({ status: 'idle' });
-                setModalCekSaldoInput('');
-              }} 
-              className="sm:hidden shrink-0 text-emerald-700 dark:text-emerald-400 border-emerald-600/40"
-              title="Cek Saldo Kartu"
-            >
-              <Wallet className="w-4 h-4 text-emerald-600" />
-            </Button>
-            <Button variant="outline" size="icon" className="shrink-0"><Filter className="w-4 h-4" /></Button>
+            <Button variant="outline" size="icon" className="shrink-0" title="Filter"><Filter className="w-4 h-4" /></Button>
             <Button variant="secondary" onClick={handleClosing} className="font-bold hidden lg:flex">
               TUTUP KASIR
             </Button>
-            <Button variant="secondary" size="icon" onClick={handleClosing} className="lg:hidden shrink-0">
+            <Button variant="secondary" size="icon" onClick={handleClosing} className="lg:hidden shrink-0" title="Tutup Kasir">
               <FileText className="w-4 h-4" />
             </Button>
-            <Button variant="destructive" size="icon" onClick={handleLogout} className="shrink-0 group relative">
+            <Button variant="destructive" size="icon" onClick={handleLogout} className="shrink-0 group relative" title="Logout">
               <LogOut className="w-4 h-4" />
               <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 transition-transform bg-foreground text-background px-2 py-1 text-xs font-mono">LOGOUT</span>
             </Button>
