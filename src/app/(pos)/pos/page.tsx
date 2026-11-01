@@ -788,18 +788,13 @@ export default function PosPage() {
     
     pollingRef.current = setInterval(async () => {
       try {
-        const savedDomain = localStorage.getItem("PAKASIR_DOMAIN") || "depodomain";
-        const savedApiKey = localStorage.getItem("PAKASIR_APIKEY") || "xxx123";
-
-        const payload = { slug: savedDomain, amount, orderId, apiKey: savedApiKey };
-        const res = await fetch('/api/pakasir', {
+        const res = await fetch('/api/doku', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'pollPakasirStatus', data: payload })
+          body: JSON.stringify({ action: 'checkDokuStatus', data: { orderId } })
         }).then(r => r.json());
         
-        const statusStr = (res?.transaction?.status || res?.payment?.status || res?.status || '').toLowerCase();
-        if (['completed', 'success', 'settlement', 'paid', 'lunas'].includes(statusStr) || res?.data?.status === 'Lunas') {
+        if (res?.isPaid || res?.status === 'SUCCESS') {
           if (pollingRef.current) clearInterval(pollingRef.current);
           setPakasirData(prev => ({ ...prev, isPaid: true, step: 'PAID' }));
           
@@ -809,90 +804,59 @@ export default function PosPage() {
       } catch (err) {
         console.error("Polling error:", err);
       }
-    }, 5000);
+    }, 4000);
   };
 
   const generatePakasir = async (type: string) => {
-    toast.error("Metode pembayaran QRIS dan Virtual Account sedang dinonaktifkan sementara.");
-    setPakasirData(prev => ({ ...prev, loading: false }));
-    return;
     setPakasirData(prev => ({ ...prev, loading: true }));
     try {
-      // Retrieve credentials from localStorage
-      const savedDomain = localStorage.getItem("PAKASIR_DOMAIN") || "depodomain";
-      const savedApiKey = localStorage.getItem("PAKASIR_APIKEY") || "xxx123";
-
-      // Unique Order ID
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const amount = getCartTotal();
 
-      // Validasi batas minimal Virtual Account Pakasir (Min Rp 10.000)
       if (type !== 'qris' && amount < 10000) {
         toast.error("Pembayaran Virtual Account minimal Rp 10.000. Untuk total di bawah Rp 10.000 silakan pilih QRIS.");
         setPakasirData(prev => ({ ...prev, loading: false }));
         return;
       }
-      
+
       const dbPayload = {
         orderId,
         santriId: buyerId || pendingBuyer?.nis || null,
         buyerName: buyerData?.nama || pendingBuyer?.nama || "Guest",
         total: amount,
         method: type,
-        slug: savedDomain,
-        apiKey: savedApiKey,
         warungId: (user?.warungId === 'ALL' && cart.length > 0) ? (cart[0].warungId || 'ALL') : (user?.warungId || "UNKNOWN"),
         items: cart.map((c: any) => ({ id: c.id, name: c.name, price: c.price, quantity: c.quantity }))
       };
 
-      await supabase.from('PakasirOrders').insert([{
-        order_id: orderId,
-        tipe: 'POS',
-        status: 'PENDING',
-        payload: dbPayload
-      }]);
-
-      const payload = { slug: savedDomain, method: type, amount, orderId, apiKey: savedApiKey };
-      
-      const response = await fetch('/api/pakasir', {
+      const res = await fetch('/api/doku', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'requestPakasirPayment', data: payload })
+        body: JSON.stringify({ action: 'requestDokuPayment', data: dbPayload })
       }).then(r => r.json());
-      const res = typeof response === 'string' ? JSON.parse(response) : response;
 
-      if (res?.status === 'success' || res?.checkout_url || (res?.data && (res?.data?.status === 'success' || res?.data?.payment_number || res?.data?.va_number)) || res?.payment || res?.payment_number || res?.va_number || res?.payment_link) {
-        const paymentData = res?.payment || res?.data || res;
-        const checkoutUrl = paymentData.checkout_url || paymentData.url || paymentData.payment_link;
-        const qrString = paymentData.va_number || paymentData.payment_number || paymentData.qr_string || null;
+      if (res?.status === 'success' && res.payment) {
+        const paymentData = res.payment;
+        const qrString = paymentData.va_number || paymentData.qr_string || paymentData.checkout_url || null;
+        const checkoutUrl = paymentData.checkout_url || paymentData.url || paymentData.how_to_pay_url;
         
-        // Detect sandbox mode from the QR string response or VA dummy number
-        const isSandboxServer = qrString && (qrString.toUpperCase().includes('SANDBOX') || qrString === '123123123');
         setPakasirTimeLeft(900);
         setPakasirData({
-          step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
+          step: (type === 'qris' || res.type === 'CHECKOUT') ? 'SHOW_QR' : 'SHOW_VA',
           qrString,
-          url: paymentData.url || checkoutUrl,
+          url: checkoutUrl,
           loading: false,
           isPaid: false,
           checkoutUrl,
-          isSandbox: isSandboxServer
+          isSandbox: false
         });
         pollPakasirStatus(orderId, amount);
       } else {
-        toast.warning(res?.message || res?.error || res?.data?.message || res?.data?.error || "API Pakasir belum disetting (Mode Sandbox Aktif)"); console.error("Pakasir API Error:", res);
-        setPakasirData({
-          step: type === 'qris' ? 'SHOW_QR' : 'SHOW_VA',
-          qrString: type === 'qris' ? 'SANDBOX-QR-' + Date.now() : '1234567890 (SANDBOX)',
-          url: 'https://sandbox.pakasir.com/simulate',
-          loading: false,
-          isPaid: false,
-          checkoutUrl: 'https://sandbox.pakasir.com/simulate',
-          isSandbox: true
-        });
+        toast.error(res?.message || "Gagal memproses pembayaran DOKU");
+        setPakasirData(prev => ({ ...prev, loading: false }));
       }
     } catch (err: any) {
-      toast.error("Error menghubungi Pakasir: " + err.message);
+      toast.error(err.message || "Gagal menghubungi server DOKU");
       setPakasirData(prev => ({ ...prev, loading: false }));
     }
   };
@@ -1449,7 +1413,22 @@ export default function PosPage() {
                     <span>BAYAR PAKAI TABUNGAN</span>
                     <Receipt className="w-6 h-6" />
                   </Button>
-                  {/* Metode QRIS & Virtual Account di-hide sementara sesuai permintaan user */}
+                  <Button 
+                    className="h-16 text-lg font-bold flex justify-between px-6 bg-blue-600 hover:bg-blue-700 text-white border-blue-800" 
+                    onClick={() => { setPaymentMethod('QRIS'); generatePakasir('qris'); }}
+                    disabled={pakasirData.loading}
+                  >
+                    <span>{pakasirData.loading && paymentMethod === 'QRIS' ? "MEMPROSES DOKU..." : "BAYAR QRIS (DOKU)"}</span>
+                    <QrCode className="w-6 h-6" />
+                  </Button>
+                  <Button 
+                    className="h-16 text-lg font-bold flex justify-between px-6 bg-orange-600 hover:bg-orange-700 text-white border-orange-800" 
+                    onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
+                    disabled={pakasirData.loading}
+                  >
+                    <span>VIRTUAL ACCOUNT (DOKU)</span>
+                    <CreditCard className="w-6 h-6" />
+                  </Button>
                 </>
               )}
 
