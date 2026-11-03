@@ -100,8 +100,14 @@ export const supabaseServices = {
     return { status: 'success', data: mapKeysToLower(data) };
   },
 
-  getTransaksi: async () => {
-    const { data, error } = await supabase.from('Transaksi').select('*').order('Waktu', { ascending: false });
+  getTransaksi: async (payload?: any) => {
+    let q = supabase.from('Transaksi').select('*').order('Waktu', { ascending: false });
+    if (payload?.warungId && payload.warungId !== 'ALL') {
+      q = q.eq('WarungID', payload.warungId);
+    }
+    const limitCount = payload?.limit ? Number(payload.limit) : 1000;
+    q = q.limit(limitCount);
+    const { data, error } = await q;
     if (error) return { status: 'error', message: error.message };
     return { status: 'success', data: mapKeysToLower(data) };
   },

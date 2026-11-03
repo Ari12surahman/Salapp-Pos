@@ -43,29 +43,32 @@ export default function CashflowPage() {
   const [newKategoriNama, setNewKategoriNama] = useState("");
   const [newKategoriTipe, setNewKategoriTipe] = useState("MASUK");
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const res = await api.post('getKasWarung', { warungId: user?.warungId || "ALL" });
       if (res?.data) {
         setData(res.data);
       }
-      const catRes = await api.post('getKategoriKasWarung', { warungId: user?.warungId || "ALL" });
-      if (catRes?.data) {
-        setKategoriList(catRes.data);
+      if (kategoriList.length === 0) {
+        const catRes = await api.post('getKategoriKasWarung', { warungId: user?.warungId || "ALL" });
+        if (catRes?.data) {
+          setKategoriList(catRes.data);
+        }
       }
     } catch (err) {
-      toast.error("Gagal memuat data buku kas.");
+      if (!isBackground) toast.error("Gagal memuat data buku kas.");
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
-      fetchData();
-    }, 10000); // 10s polling for realtime
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchData(true);
+    }, 45000); // 45 detik (sebelumnya 10 detik) & skip jika tab tidak aktif
     return () => clearInterval(interval);
   }, [user]);
 

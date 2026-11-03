@@ -124,10 +124,6 @@ export default function LaporanPage() {
     api.get('getSantri').then(res => {
       if (res?.data && Array.isArray(res.data)) setSantriList(res.data);
     }).catch(() => {});
-    const interval = setInterval(() => {
-      fetchTransaksi(true);
-    }, 10000); // 10s polling for realtime
-    return () => clearInterval(interval);
   }, []);
 
   const handleExportExcel = async () => {

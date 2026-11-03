@@ -34,15 +34,15 @@ export default function CekSaldoPage() {
   const { data: santriMasterData, isLoading: santriLoading } = useQuery({
     queryKey: ['santriMaster'],
     queryFn: () => api.get('getSantri', { params: { spreadsheetId: "1jrUrg3DVS0migGJdWuzaRj4WJ65hS_ZSPG7y7bwPHe0" } }).then(res => res.data),
-    staleTime: 0,
-    refetchInterval: 5000,
+    staleTime: 1000 * 60 * 5, // 5 menit cache
+    refetchOnWindowFocus: false,
   });
 
   const { data: tabunganMasterData, isLoading: tabunganLoading } = useQuery({
     queryKey: ['tabunganMaster'],
     queryFn: () => api.get('getTabungan').then(res => res.data),
-    staleTime: 0,
-    refetchInterval: 5000,
+    staleTime: 1000 * 60 * 2, // 2 menit cache
+    refetchOnWindowFocus: false,
   });
 
   const handleCekSaldo = async (id: string) => {
