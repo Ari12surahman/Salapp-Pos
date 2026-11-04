@@ -21,27 +21,34 @@ import { supabase } from "@/lib/supabase";
 
 export const getBankLogo = (method: string) => {
   const m = (method || '').toLowerCase();
-  if (m.includes('bri')) return '/banks/bri.png';
-  if (m.includes('bni')) return '/banks/bni.png';
-  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.png';
-  if (m.includes('cimb')) return '/banks/cimb.png';
-  if (m.includes('danamon')) return '/banks/danamon.png';
-  if (m.includes('permata')) return '/banks/permata.png';
-  if (m.includes('mandiri')) return '/banks/mandiri.png';
-  if (m.includes('qris')) return '/banks/qris.png';
+  if (m.includes('bca')) return '/banks/bca.svg';
+  if (m.includes('mandiri')) return '/banks/mandiri.svg';
+  if (m.includes('bri')) return '/banks/bri.svg';
+  if (m.includes('bni')) return '/banks/bni.svg';
+  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.svg';
+  if (m.includes('cimb')) return '/banks/cimb.svg';
+  if (m.includes('permata')) return '/banks/permata.svg';
+  if (m.includes('danamon')) return '/banks/danamon.svg';
+  if (m.includes('maybank')) return '/banks/maybank.svg';
+  if (m.includes('ocbc')) return '/banks/ocbc.svg';
+  if (m.includes('qris')) return '/banks/qris.svg';
   return null;
 };
 
 export const getBankDisplayName = (method: string) => {
   const map: Record<string, string> = {
+    qris: 'QRIS Dinamis',
+    bca_va: 'BCA Virtual Account',
+    mandiri_va: 'Mandiri Virtual Account',
     bri_va: 'BRI Virtual Account',
     bni_va: 'BNI Virtual Account',
     bsi_va: 'BSI Virtual Account',
     cimb_niaga_va: 'CIMB Niaga VA',
+    cimb_va: 'CIMB Niaga VA',
     danamon_va: 'Danamon VA',
     permata_va: 'Bank Permata VA',
-    mandiri_va: 'Mandiri Virtual Account',
-    qris: 'QRIS',
+    maybank_va: 'Maybank VA',
+    ocbc_va: 'OCBC VA',
     payment_link: 'Payment Link'
   };
   return map[method] || String(method || '').replace('_va', ' VA').toUpperCase();
@@ -194,7 +201,9 @@ export default function PosPage() {
     isPaid: boolean, 
     checkoutUrl: string,
     isSandbox?: boolean,
-    orderId?: string
+    orderId?: string,
+    errorMessage?: string,
+    detectedIp?: string
   }>({ 
     step: 'CHOOSE_METHOD', 
     qrString: null, 
@@ -808,10 +817,10 @@ export default function PosPage() {
     
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch('/api/doku', {
+        const res = await fetch('/api/wijayapay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'checkDokuStatus', data: { orderId } })
+          body: JSON.stringify({ action: 'checkStatus', data: { orderId } })
         }).then(r => r.json());
         
         if (res?.isPaid || res?.status === 'SUCCESS') {
@@ -852,10 +861,10 @@ export default function PosPage() {
         items: cart.map((c: any) => ({ id: c.id, name: c.name, price: c.price, quantity: c.quantity }))
       };
 
-      const res = await fetch('/api/doku', {
+      const res = await fetch('/api/wijayapay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'requestDokuPayment', data: dbPayload })
+        body: JSON.stringify({ action: 'requestPayment', data: dbPayload })
       }).then(r => r.json());
 
       if (res?.status === 'success' && res.payment) {
@@ -876,12 +885,26 @@ export default function PosPage() {
         });
         pollPakasirStatus(orderId, amount, type);
       } else {
-        toast.error(res?.message || "Gagal memproses pembayaran DOKU");
-        setPakasirData(prev => ({ ...prev, loading: false, step: 'CHOOSE_VA' }));
+        const errMsg = res?.message || "Gagal memproses pembayaran";
+        toast.error(errMsg);
+        setPakasirData(prev => ({ 
+          ...prev, 
+          loading: false, 
+          step: 'ERROR',
+          errorMessage: errMsg,
+          detectedIp: (errMsg.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/) || [])[1] || ''
+        }));
       }
     } catch (err: any) {
-      toast.error(err.message || "Gagal menghubungi server DOKU");
-      setPakasirData(prev => ({ ...prev, loading: false, step: 'CHOOSE_VA' }));
+      const errMsg = err?.message || "Gagal menghubungi server";
+      toast.error(errMsg);
+      setPakasirData(prev => ({ 
+        ...prev, 
+        loading: false, 
+        step: 'ERROR',
+        errorMessage: errMsg,
+        detectedIp: (errMsg.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/) || [])[1] || ''
+      }));
     }
   };
 
@@ -1420,18 +1443,22 @@ export default function PosPage() {
                     <span>BAYAR PAKAI TABUNGAN</span>
                     <Receipt className="w-6 h-6" />
                   </Button>
-                  <div className="h-16 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between px-5 opacity-60 cursor-not-allowed">
+                  <Button 
+                    className="h-16 text-lg font-bold flex justify-between px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm border border-emerald-700" 
+                    onClick={() => { setPaymentMethod('qris'); generatePakasir('qris'); }}
+                    disabled={pakasirData.loading}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0">
-                        <img src="/banks/qris.png" alt="QRIS" className="w-full h-full object-contain opacity-50" />
+                      <div className="w-10 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0 shadow-xs">
+                        <img src="/banks/qris.svg" alt="QRIS" className="w-full h-full object-contain" />
                       </div>
                       <div className="flex flex-col text-left">
-                        <span className="text-base font-bold text-slate-600">BAYAR QRIS</span>
-                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded w-fit">Segera Hadir</span>
+                        <span className="text-base font-bold leading-tight">BAYAR QRIS</span>
+                        <span className="text-[10px] font-medium text-emerald-100">BCA, Mandiri, BRI, BNI, GoPay, OVO, ShopeePay</span>
                       </div>
                     </div>
-                    <span className="text-xs text-slate-400 font-medium">Dalam Pemeliharaan</span>
-                  </div>
+                    <QrCode className="w-6 h-6 text-emerald-200" />
+                  </Button>
                   <Button 
                     className="h-16 text-lg font-bold flex justify-between px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm" 
                     onClick={() => { setPaymentMethod('VA'); setPakasirData({ ...pakasirData, step: 'CHOOSE_VA' }); }}
@@ -1448,18 +1475,22 @@ export default function PosPage() {
                   <div className="flex items-center justify-between mb-1 border-b border-border pb-2">
                     <div>
                       <h3 className="font-bold text-base text-foreground">Pilih Bank Virtual Account</h3>
-                      <p className="text-xs text-muted-foreground">Verifikasi pembayaran otomatis 24 jam</p>
+                      <p className="text-xs text-muted-foreground">Verifikasi pembayaran otomatis 24 jam (WijayaPay)</p>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' })}>Kembali</Button>
                   </div>
                   
                   {[
-                    { id: 'bri_va', name: 'Bank BRI', logo: '/banks/bri.png' },
-                    { id: 'bni_va', name: 'Bank BNI', logo: '/banks/bni.png' },
-                    { id: 'bsi_va', name: 'Bank Syariah Indonesia (BSI)', logo: '/banks/bsi.png' },
-                    { id: 'cimb_niaga_va', name: 'Bank CIMB Niaga', logo: '/banks/cimb.png' },
-                    { id: 'danamon_va', name: 'Bank Danamon', logo: '/banks/danamon.png' },
-                    { id: 'permata_va', name: 'Bank Permata', logo: '/banks/permata.png' }
+                    { id: 'bca_va', name: 'Bank BCA', logo: '/banks/bca.svg' },
+                    { id: 'mandiri_va', name: 'Bank Mandiri', logo: '/banks/mandiri.svg' },
+                    { id: 'bri_va', name: 'Bank BRI', logo: '/banks/bri.svg' },
+                    { id: 'bni_va', name: 'Bank BNI', logo: '/banks/bni.svg' },
+                    { id: 'bsi_va', name: 'Bank Syariah Indonesia (BSI)', logo: '/banks/bsi.svg' },
+                    { id: 'cimb_niaga_va', name: 'Bank CIMB Niaga', logo: '/banks/cimb.svg' },
+                    { id: 'permata_va', name: 'Bank Permata', logo: '/banks/permata.svg' },
+                    { id: 'danamon_va', name: 'Bank Danamon', logo: '/banks/danamon.svg' },
+                    { id: 'maybank_va', name: 'Bank Maybank', logo: '/banks/maybank.svg' },
+                    { id: 'ocbc_va', name: 'Bank OCBC', logo: '/banks/ocbc.svg' },
                   ].map((bank) => (
                     <button 
                       key={bank.id}
@@ -1486,11 +1517,37 @@ export default function PosPage() {
                 </div>
               )}
 
+              {pakasirData.step === 'ERROR' && (
+                <div className="flex flex-col items-center gap-3 text-center p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-2xl animate-fade-in-up">
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/50 text-red-600 rounded-full flex items-center justify-center">
+                    <X className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-bold text-red-800 dark:text-red-300 text-base">Gagal Memproses Transaksi</h4>
+                  <p className="text-xs text-red-700 dark:text-red-400 max-w-sm leading-relaxed">
+                    {pakasirData.errorMessage || "Terjadi kesalahan saat memanggil gateway WijayaPay."}
+                  </p>
+                  {pakasirData.errorMessage?.includes('whitelist') && (
+                    <div className="p-3 bg-white dark:bg-card rounded-xl border border-red-200 dark:border-red-900 text-left text-xs text-slate-700 dark:text-slate-300 w-full">
+                      <p className="font-bold text-slate-900 dark:text-foreground mb-1">💡 Solusi IP Whitelist WijayaPay:</p>
+                      <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-muted-foreground">
+                        <li>Buka <b>Pengaturan &gt; Credential</b> di <a href="https://app.wijayapay.com/pengaturan/credential" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">app.wijayapay.com</a></li>
+                        <li>Klik <b>Edit Credential</b></li>
+                        <li>Di kolom <b>Whitelist IP</b>, isi tanda bintang (<b>*</b>) atau masukkan: <code className="bg-slate-100 dark:bg-muted px-1 py-0.5 rounded font-mono font-bold text-red-600">{pakasirData.detectedIp || '54.80.15.216, 54.226.62.196, 182.10.161.222'}</code></li>
+                        <li>Klik <b>Simpan</b>, lalu coba lagi.</li>
+                      </ol>
+                    </div>
+                  )}
+                  <Button variant="outline" className="w-full font-bold mt-2" onClick={() => setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' })}>
+                    KEMBALI KE PILIHAN PEMBAYARAN
+                  </Button>
+                </div>
+              )}
+
               {pakasirData.step === 'LOADING' && (
                 <div className="flex flex-col items-center justify-center py-12">
                   <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin mb-4" />
-                  <p className="font-bold text-foreground text-sm uppercase tracking-wider">Menyiapkan Virtual Account...</p>
-                  <p className="text-xs text-muted-foreground mt-1">Menghubungi gateway perbankan DOKU</p>
+                  <p className="font-bold text-foreground text-sm uppercase tracking-wider">Menyiapkan Pembayaran...</p>
+                  <p className="text-xs text-muted-foreground mt-1">Menghubungi gateway perbankan WijayaPay</p>
                 </div>
               )}
 
@@ -1736,7 +1793,7 @@ export default function PosPage() {
                       {pakasirData.qrString && (
                         <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center">
                           <div className="w-20 h-12 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center mb-2 shadow-xs">
-                            <img src={getBankLogo(paymentMethod) || '/banks/bri.png'} alt="Bank" className="w-full h-full object-contain" />
+                            <img src={getBankLogo(paymentMethod) || '/banks/bri.svg'} alt="Bank" className="w-full h-full object-contain" />
                           </div>
                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{getBankDisplayName(paymentMethod)}</p>
                           <div className="text-3xl font-mono font-bold text-slate-900 tracking-wider break-all mb-4">{pakasirData.qrString}</div>
