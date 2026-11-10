@@ -68,7 +68,7 @@ export default function CashflowPage() {
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       fetchData(true);
-    }, 45000); // 45 detik (sebelumnya 10 detik) & skip jika tab tidak aktif
+    }, 180000); // 3 menit (sebelumnya 45 detik) & skip jika tab tidak aktif
     return () => clearInterval(interval);
   }, [user]);
 
