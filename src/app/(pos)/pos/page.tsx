@@ -18,6 +18,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useSyncStore } from "@/store/useSyncStore";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/lib/supabase";
+import { getPeriodStartDateWIB, getWIBDateStr } from "@/lib/api/supabaseServices";
 
 export const getBankLogo = (method: string) => {
   const m = (method || '').toLowerCase();
@@ -396,26 +397,8 @@ export default function PosPage() {
               periode = foundSantri.limit_periode || liveConfig?.defaultPeriode || 'harian';
             }
 
-            const now = new Date();
-            const localYear = now.getFullYear();
-            const localMonth = String(now.getMonth() + 1).padStart(2, '0');
-            const localDay = String(now.getDate()).padStart(2, '0');
-            startDateStr = `${localYear}-${localMonth}-${localDay}`;
-
-            if (periode === 'mingguan') {
-              periodeLabel = 'Minggu Ini';
-              const d = new Date(now);
-              const day = d.getDay();
-              const diff = (day === 0 ? -6 : 1) - day;
-              d.setDate(d.getDate() + diff);
-              const mYear = d.getFullYear();
-              const mMonth = String(d.getMonth() + 1).padStart(2, '0');
-              const mDay = String(d.getDate()).padStart(2, '0');
-              startDateStr = `${mYear}-${mMonth}-${mDay}`;
-            } else if (periode === 'bulanan') {
-              periodeLabel = 'Bulan Ini';
-              startDateStr = `${localYear}-${localMonth}-01`;
-            }
+            startDateStr = getPeriodStartDateWIB(periode);
+            periodeLabel = periode === 'mingguan' ? 'Minggu Ini (Reset Senin)' : periode === 'bulanan' ? 'Bulan Ini' : 'Hari Ini';
           }
 
           let foundTabunganRows: any[] = [];
@@ -423,7 +406,8 @@ export default function PosPage() {
             const { data: directTab } = await supabase
               .from('Tabungan')
               .select('*')
-              .or(`nis.eq.${sNis},nis.eq.${sNisClean}`);
+              .or(`nis.eq.${sNis},nis.eq.${sNisClean}`)
+              .order('tanggal', { ascending: false });
             if (directTab && directTab.length > 0) {
               foundTabunganRows = directTab;
             }
@@ -478,13 +462,13 @@ export default function PosPage() {
             showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
           } else if (limitJajan > 0 && totalJajanPeriod >= limitJajan) {
             playError();
-            showCheckoutAlert('error', `LIMIT ${periodeLabel.toUpperCase()} HABIS`, `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSudah Terpakai: Rp ${totalJajanPeriod.toLocaleString('id-ID')}\nSisa Limit: Rp 0`, foundSantri.nama);
+            showCheckoutAlert('error', `LIMIT ${periodeLabel.toUpperCase()} HABIS`, `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSudah Terpakai: Rp ${totalJajanPeriod.toLocaleString('id-ID')}\nSisa Limit: Rp 0\n\n(Catatan: Saldo tabungan Rp ${saldo.toLocaleString('id-ID')} masih ada, namun kuota jajan periode ini telah habis)`, foundSantri.nama);
             setPendingBuyer(null);
             setPinModalOpen(false);
           } else if (limitJajan > 0 && (totalJajanPeriod + getCartTotal() > limitJajan)) {
             playError();
             const sisaLimit = limitJajan - totalJajanPeriod;
-            showCheckoutAlert('error', 'MELEBIHI LIMIT TABUNGAN', `Sisa Limit ${periodeLabel}: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}`, foundSantri.nama);
+            showCheckoutAlert('error', 'MELEBIHI LIMIT TABUNGAN', `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSisa Kuota Belanja: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}\nTotal Belanja: Rp ${getCartTotal().toLocaleString('id-ID')}`, foundSantri.nama);
             setPendingBuyer(null);
             setPinModalOpen(false);
           } else {
@@ -568,7 +552,8 @@ export default function PosPage() {
           const { data: directTab } = await supabase
             .from('Tabungan')
             .select('*')
-            .or(`nis.eq.${sNis},nis.eq.${sNisClean}`);
+            .or(`nis.eq.${sNis},nis.eq.${sNisClean}`)
+            .order('tanggal', { ascending: false });
           if (directTab && directTab.length > 0) foundRows = directTab;
         } catch (e) {
           console.warn("Direct Supabase query error in cek saldo:", e);
@@ -620,23 +605,8 @@ export default function PosPage() {
             periode = found.limit_periode || liveConfig?.defaultPeriode || 'harian';
           }
 
-          const now = new Date();
-          const localYear = now.getFullYear();
-          const localMonth = String(now.getMonth() + 1).padStart(2, '0');
-          const localDay = String(now.getDate()).padStart(2, '0');
-          let startDateStr = `${localYear}-${localMonth}-${localDay}`;
-
-          if (periode === 'mingguan') {
-            periodeLabel = 'Minggu Ini';
-            const d = new Date(now);
-            const day = d.getDay();
-            const diff = (day === 0 ? -6 : 1) - day;
-            d.setDate(d.getDate() + diff);
-            startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          } else if (periode === 'bulanan') {
-            periodeLabel = 'Bulan Ini';
-            startDateStr = `${localYear}-${localMonth}-01`;
-          }
+          let startDateStr = getPeriodStartDateWIB(periode);
+          periodeLabel = periode === 'mingguan' ? 'Minggu Ini (Reset Senin)' : periode === 'bulanan' ? 'Bulan Ini' : 'Hari Ini';
 
           if (limitJajan > 0 && foundRows.length > 0) {
             totalJajanPeriod = foundRows.reduce((sum: number, t: any) => {

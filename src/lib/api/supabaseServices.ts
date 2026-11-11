@@ -11,6 +11,42 @@ const mapKeysToLower = (data: any[]) => {
   });
 };
 
+// Helper untuk mendapatkan tanggal dalam zona waktu Asia/Jakarta (WIB)
+export const getWIBDate = (date = new Date()) => {
+  return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+};
+
+export const getWIBDateStr = (date = new Date()) => {
+  const d = getWIBDate(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const getPeriodStartDateWIB = (periode = 'mingguan', date = new Date()) => {
+  const d = getWIBDate(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+
+  if (periode === 'harian') {
+    return `${y}-${m}-${day}`;
+  }
+  if (periode === 'bulanan') {
+    return `${y}-${m}-01`;
+  }
+  // mingguan: cari hari Senin minggu ini (WIB)
+  const dayOfWeek = d.getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
+  const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+  d.setDate(d.getDate() + diffToMonday);
+
+  const my = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const md = String(d.getDate()).padStart(2, '0');
+  return `${my}-${mm}-${md}`;
+};
+
 export const supabaseServices = {
   getSantri: async () => {
     const { data, error } = await supabase.from('Data Santri').select('*');
@@ -417,7 +453,7 @@ export const supabaseServices = {
 
     const { error } = await supabase.from('Tabungan').insert({
       id: `TB-${new Date().getTime()}`,
-      tanggal: new Date().toISOString().split('T')[0],
+      tanggal: getWIBDateStr(new Date()),
       nis: targetNis,
       nama: targetNama,
       jenis: 'Setor',
@@ -471,24 +507,8 @@ export const supabaseServices = {
       }
 
       if (limit > 0) {
-        const now = new Date();
-        const localYear = now.getFullYear();
-        const localMonth = String(now.getMonth() + 1).padStart(2, '0');
-        const localDay = String(now.getDate()).padStart(2, '0');
-        let startDateStr = `${localYear}-${localMonth}-${localDay}`;
-        let periodeLabel = 'Harian';
-
-        if (periode === 'mingguan') {
-          periodeLabel = 'Mingguan';
-          const d = new Date(now);
-          const day = d.getDay();
-          const diff = (day === 0 ? -6 : 1) - day;
-          d.setDate(d.getDate() + diff);
-          startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        } else if (periode === 'bulanan') {
-          periodeLabel = 'Bulanan';
-          startDateStr = `${localYear}-${localMonth}-01`;
-        }
+        const startDateStr = getPeriodStartDateWIB(periode);
+        const periodeLabel = periode === 'mingguan' ? 'Mingguan (Reset Senin)' : periode === 'bulanan' ? 'Bulanan' : 'Harian';
 
         const { data: tabungan } = await supabase
           .from('Tabungan')
@@ -496,7 +516,6 @@ export const supabaseServices = {
           .or(`nis.eq.${payload.santriId},nis.eq.${sNisClean}`)
           .in('jenis', ['Tarik', 'tarik', 'Keluar', 'keluar'])
           .gte('tanggal', startDateStr);
-
 
         const totalJajanPeriod = (tabungan || []).reduce((sum, t) => {
           const ket = String(t.keterangan || '').toLowerCase();
@@ -508,7 +527,7 @@ export const supabaseServices = {
           const sisa = limit - totalJajanPeriod;
           return {
             status: 'error',
-            message: `Transaksi ditolak: Melebihi limit tabungan ${periodeLabel.toLowerCase()}. Sisa limit: Rp ${(sisa > 0 ? sisa : 0).toLocaleString('id-ID')}`
+            message: `Transaksi ditolak: Melebihi batas kuota limit ${periodeLabel.toLowerCase()}. Sisa limit: Rp ${(sisa > 0 ? sisa : 0).toLocaleString('id-ID')}`
           };
         }
       }
@@ -534,7 +553,7 @@ export const supabaseServices = {
     if (payload.method === 'Tabungan') {
       await supabase.from('Tabungan').insert({
         id: `TB-${new Date().getTime()}`,
-        tanggal: new Date().toISOString().split('T')[0],
+        tanggal: getWIBDateStr(new Date()),
         nis: payload.santriId,
         nama: payload.buyerName || 'Santri',
         jenis: 'Tarik',

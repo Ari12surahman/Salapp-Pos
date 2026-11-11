@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History } from "lucide-react";
+import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History, Sparkles, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/axios";
@@ -9,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { CameraScanner } from "@/components/ui/CameraScanner";
 import { useAudio } from "@/hooks/useAudio";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { getPeriodStartDateWIB } from "@/lib/api/supabaseServices";
 
 export default function CekSaldoPage() {
   const { playDing, playError } = useAudio();
@@ -23,6 +25,13 @@ export default function CekSaldoPage() {
     nis?: string;
     kelas?: string;
     pin?: string;
+    limitJajan?: number;
+    periode?: string;
+    periodeLabel?: string;
+    isCustomLimit?: boolean;
+    terpakaiLimit?: number;
+    sisaLimit?: number | null;
+    persentaseLimit?: number;
     mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
   }>({ status: 'idle' });
 
@@ -42,6 +51,19 @@ export default function CekSaldoPage() {
     queryKey: ['tabunganMaster'],
     queryFn: () => api.get('getTabungan').then(res => res.data),
     staleTime: 1000 * 60 * 2, // 2 menit cache
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: limitConfigData } = useQuery({
+    queryKey: ['tabunganLimitConfig'],
+    queryFn: async () => {
+      const { data } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+      if (data?.nilai) {
+        return JSON.parse(data.nilai);
+      }
+      return null;
+    },
+    staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
 
@@ -95,16 +117,24 @@ export default function CekSaldoPage() {
 
         let saldo = 0;
         let recentMutasi: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }> = [];
+        let limitJajan = 0;
+        let periode = 'mingguan';
+        let periodeLabel = 'Minggu Ini (Reset tiap Senin)';
+        let isCustomLimit = false;
+        let terpakaiLimit = 0;
+        let sisaLimit: number | null = null;
+        let persentaseLimit = 0;
 
+        let foundTabunganRows: any[] = [];
         if (currentTabunganList && Array.isArray(currentTabunganList)) {
           const sNisClean = String(foundSantri.nis).replace(/^0+/, '');
-          const foundTabunganRows = currentTabunganList.filter((t: any) => 
+          foundTabunganRows = currentTabunganList.filter((t: any) => 
             String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
           );
           saldo = foundTabunganRows.reduce((sum: number, t: any) => {
             const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
             const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
-            return (jenis === 'tarik' || jenis === 'keluar') ? sum - nom : sum + nom;
+            return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet') ? sum - nom : sum + nom;
           }, 0);
 
           const sortedRows = [...foundTabunganRows].reverse();
@@ -116,6 +146,67 @@ export default function CekSaldoPage() {
           }));
         }
 
+        // Hitung limit jajan untuk santri (bukan kas kamar)
+        if (!isKamar) {
+          let liveConfig = limitConfigData;
+          if (!liveConfig) {
+            try {
+              const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+              if (cfgRow?.nilai) liveConfig = JSON.parse(cfgRow.nilai);
+            } catch (e) {}
+          }
+
+          const sNis = String(foundSantri.nis || '').trim();
+          const sNisClean = sNis.replace(/^0+/, '');
+          const override = liveConfig?.santriLimits?.[sNis] || liveConfig?.santriLimits?.[sNisClean];
+
+          if (override && override.limit !== undefined) {
+            limitJajan = Number(override.limit);
+            periode = override.periode || 'mingguan';
+            isCustomLimit = true;
+          } else if (liveConfig?.defaultLimit !== undefined && Number(liveConfig.defaultLimit) > 0) {
+            limitJajan = Number(liveConfig.defaultLimit);
+            periode = liveConfig.defaultPeriode || 'mingguan';
+            isCustomLimit = false;
+          } else if (foundSantri.limit_jajan_harian && Number(foundSantri.limit_jajan_harian) > 0) {
+            limitJajan = Number(foundSantri.limit_jajan_harian);
+            periode = foundSantri.limit_periode || liveConfig?.defaultPeriode || 'harian';
+            isCustomLimit = true;
+          }
+
+          const startDateStr = getPeriodStartDateWIB(periode);
+          periodeLabel = periode === 'mingguan' 
+            ? 'Minggu Ini (Reset tiap Senin)' 
+            : periode === 'bulanan' 
+              ? 'Bulan Ini' 
+              : 'Hari Ini';
+
+          // Hitung pemakaian jajan dalam periode berjalan (hanya transaksi jajan/kantin/pos)
+          if (limitJajan > 0 && foundTabunganRows.length > 0) {
+            terpakaiLimit = foundTabunganRows.reduce((sum: number, t: any) => {
+              const nom = Number(t.nominal || t.Nominal || t.Saldo || t.saldo || 0);
+              const jenis = String(t.jenis || t.Jenis || 'Setor').toLowerCase().trim();
+              const rawDate = t.tanggal || t.Tanggal || t.created_at || '';
+              const tgl = String(rawDate).split('T')[0];
+              const ket = String(t.keterangan || t.Keterangan || '').toLowerCase();
+
+              const isWithdraw = jenis === 'tarik' || jenis === 'keluar' || jenis.includes('tarik') || jenis.includes('keluar') || jenis === 'debet' || jenis === 'debit';
+              const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
+
+              if (isWithdraw && isJajan && tgl >= startDateStr) {
+                return sum + nom;
+              }
+              return sum;
+            }, 0);
+
+            sisaLimit = Math.max(0, limitJajan - terpakaiLimit);
+            persentaseLimit = Math.min(100, Math.round((terpakaiLimit / limitJajan) * 100));
+          } else if (limitJajan > 0) {
+            sisaLimit = limitJajan;
+            persentaseLimit = 0;
+          }
+        }
+
         setCekSaldoData({
           status: 'success',
           nama: foundSantri.nama,
@@ -124,6 +215,13 @@ export default function CekSaldoPage() {
           nis: foundSantri.nis,
           kelas: foundSantri.kelas,
           pin: foundSantri.pin ? String(foundSantri.pin) : '',
+          limitJajan,
+          periode,
+          periodeLabel,
+          isCustomLimit,
+          terpakaiLimit,
+          sisaLimit,
+          persentaseLimit,
           mutasi: recentMutasi
         });
         setTestPinInput("");
@@ -211,6 +309,14 @@ export default function CekSaldoPage() {
                     </span>
                     <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
                       Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
+                    </p>
+                  </div>
+
+                  {/* Info Status Kas Kamar */}
+                  <div className="w-full mt-3 p-2.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/50 flex items-center gap-2 text-left">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <p className="font-mono text-[11px] text-indigo-900 dark:text-indigo-200">
+                      <strong>Kartu Kas Asrama:</strong> Bebas limit belanja berkala. Saldo dapat dipakai penuh di kasir POS dengan otorisasi PIN.
                     </p>
                   </div>
 
@@ -314,6 +420,124 @@ export default function CekSaldoPage() {
                     <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter text-green-600 dark:text-green-400">
                       Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
                     </p>
+                  </div>
+
+                  {/* Informasi Limit Jajan Santri */}
+                  <div className="w-full mt-4 pt-4 border-t-2 border-green-600/20 text-left">
+                    {cekSaldoData.limitJajan === 0 ? (
+                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-between shadow-xs">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div>
+                            <p className="font-bold text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                              BEBAS LIMIT JAJAN
+                            </p>
+                            <p className="text-[11px] text-muted-foreground font-mono">
+                              Santri tidak dibatasi kuota jajan berkala (dapat berbelanja sesuai saldo aktif).
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-mono text-[10px] font-bold uppercase tracking-wider">
+                          UNLIMITED
+                        </span>
+                      </div>
+                    ) : (
+                      <div className={`p-4 rounded-xl border-2 font-mono transition-all shadow-xs ${
+                        (cekSaldoData.sisaLimit !== null && cekSaldoData.sisaLimit !== undefined && cekSaldoData.sisaLimit <= 0)
+                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-950 dark:text-rose-200'
+                          : (cekSaldoData.persentaseLimit || 0) >= 75
+                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200'
+                            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200'
+                      }`}>
+                        {/* Header Limit */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-border/40">
+                          <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider">
+                            <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span>STATUS LIMIT: {cekSaldoData.periodeLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {cekSaldoData.isCustomLimit && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                KHUSUS
+                              </span>
+                            )}
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border border-emerald-600/25">
+                              Rp {(cekSaldoData.limitJajan || 0).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Grid 3 Statistik Kuota */}
+                        <div className="grid grid-cols-3 gap-2 py-3 text-center">
+                          <div className="p-2 rounded-lg bg-white/80 dark:bg-black/30 border border-border/40 shadow-xs">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-0.5 font-semibold">
+                              Batas Limit
+                            </span>
+                            <span className="text-xs md:text-sm font-black text-foreground">
+                              Rp {(cekSaldoData.limitJajan || 0).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white/80 dark:bg-black/30 border border-border/40 shadow-xs">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-0.5 font-semibold">
+                              Terpakai
+                            </span>
+                            <span className="text-xs md:text-sm font-black text-rose-600 dark:text-rose-400">
+                              Rp {(cekSaldoData.terpakaiLimit || 0).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white/80 dark:bg-black/30 border border-border/40 shadow-xs">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-0.5 font-bold">
+                              Sisa Limit
+                            </span>
+                            <span className={`text-xs md:text-sm font-black ${
+                              (cekSaldoData.sisaLimit !== null && cekSaldoData.sisaLimit !== undefined && cekSaldoData.sisaLimit <= 0)
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }`}>
+                              {(cekSaldoData.sisaLimit !== null && cekSaldoData.sisaLimit !== undefined && cekSaldoData.sisaLimit <= 0)
+                                ? 'HABIS (Rp 0)'
+                                : `Rp ${(cekSaldoData.sisaLimit || 0).toLocaleString('id-ID')}`
+                              }
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar Pemakaian */}
+                        <div className="space-y-1 mt-1">
+                          <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
+                            <span>Pemakaian Kuota</span>
+                            <span className="font-bold">{cekSaldoData.persentaseLimit || 0}% Terpakai</span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                (cekSaldoData.persentaseLimit || 0) >= 100
+                                  ? 'bg-rose-500'
+                                  : (cekSaldoData.persentaseLimit || 0) >= 75
+                                    ? 'bg-amber-500'
+                                    : 'bg-emerald-500'
+                              }`}
+                              style={{ width: `${Math.min(100, cekSaldoData.persentaseLimit || 0)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Banner Panduan Transaksi POS */}
+                        <div className="mt-3 pt-2.5 border-t border-border/30">
+                          {(cekSaldoData.sisaLimit !== null && cekSaldoData.sisaLimit !== undefined && cekSaldoData.sisaLimit <= 0) ? (
+                            <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 leading-tight">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              Limit jajan minggu ini telah habis. Jajan di kasir POS baru dapat dilakukan kembali setelah reset otomatis hari Senin.
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 leading-tight">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              Santri dapat berbelanja di kasir POS maksimal <strong className="text-foreground">Rp {(cekSaldoData.sisaLimit || 0).toLocaleString('id-ID')}</strong> sampai reset periode berikutnya.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Riwayat Mutasi Terakhir Santri */}
