@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, ArrowRight, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History, Layers, Sparkles } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,11 @@ export default function PosPage() {
   const [cashAmount, setCashAmount] = useState<string>("");
   const [changeAmount, setChangeAmount] = useState<number>(0);
 
+  // Modal Pilih Sumber Dana Kas / Ekskul (Multi-Kas 1 Kartu)
+  const [modalMultiKasOpen, setModalMultiKasOpen] = useState(false);
+  const [multiKasCandidates, setMultiKasCandidates] = useState<any[]>([]);
+  const [activeQuickCekKasNis, setActiveQuickCekKasNis] = useState<string>("");
+
   // Quick Cek Saldo Kasir Modal
   const [modalCekSaldoOpen, setModalCekSaldoOpen] = useState(false);
   const [modalCekSaldoInput, setModalCekSaldoInput] = useState("");
@@ -121,6 +126,15 @@ export default function PosPage() {
     sisaLimit?: number | null;
     periodeLabel?: string;
     mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
+    multiKasList?: Array<{
+      nama: string;
+      nis: string;
+      kelas?: string;
+      saldo: number;
+      hasPin: boolean;
+      isKamar: boolean;
+      mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
+    }>;
   }>({ status: 'idle' });
 
   const { data: santriMasterData, isLoading: santriLoading, refetch: refetchSantri, isFetching: isFetchingSantri } = useQuery({
@@ -344,6 +358,166 @@ export default function PosPage() {
     p.barcode?.includes(search)
   );
 
+  const proceedWithSelectedSantri = async (foundSantri: any) => {
+    let saldo = 0;
+    let totalJajanPeriod = 0;
+
+    const isKamar = String(foundSantri.nis || '').startsWith('KAS-') || (foundSantri.nama || '').toLowerCase().startsWith('kas ');
+    const sNis = String(foundSantri.nis);
+    const sNisClean = sNis.replace(/^0+/, '');
+
+    let limitJajan = 0;
+    let periode = 'harian';
+    let periodeLabel = 'Hari Ini';
+    let startDateStr = '';
+
+    // Akun Dompet Kas Kamar / Ekskul tidak dikenakan limit jajan harian santri
+    if (!isKamar) {
+      let liveConfig = limitConfigData;
+      try {
+        const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
+        if (cfgRow?.nilai) liveConfig = JSON.parse(cfgRow.nilai);
+      } catch (e) {}
+
+      const override = liveConfig?.santriLimits?.[sNis] || liveConfig?.santriLimits?.[sNisClean];
+      if (override && override.limit !== undefined) {
+        limitJajan = Number(override.limit);
+        periode = override.periode || 'harian';
+      } else if (liveConfig?.defaultLimit !== undefined && Number(liveConfig.defaultLimit) > 0) {
+        limitJajan = Number(liveConfig.defaultLimit);
+        periode = liveConfig.defaultPeriode || 'harian';
+      } else {
+        limitJajan = Number(foundSantri.limit_jajan_harian || 0);
+        periode = foundSantri.limit_periode || liveConfig?.defaultPeriode || 'harian';
+      }
+
+      startDateStr = getPeriodStartDateWIB(periode);
+      periodeLabel = periode === 'mingguan' ? 'Minggu Ini (Reset Senin)' : periode === 'bulanan' ? 'Bulan Ini' : 'Hari Ini';
+    }
+
+    let foundTabunganRows: any[] = [];
+    try {
+      const { data: directTab } = await supabase
+        .from('Tabungan')
+        .select('*')
+        .or(`nis.eq.${sNis},nis.eq.${sNisClean}`)
+        .order('tanggal', { ascending: false });
+      if (directTab && directTab.length > 0) {
+        foundTabunganRows = directTab;
+      }
+    } catch (e) {
+      console.warn("Direct Supabase fetch fallback:", e);
+    }
+
+    if (foundTabunganRows.length === 0 && tabunganMasterData && Array.isArray(tabunganMasterData)) {
+      foundTabunganRows = tabunganMasterData.filter((t: any) => 
+        String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
+      );
+    }
+
+    if (foundTabunganRows.length > 0) {
+      saldo = foundTabunganRows.reduce((sum: number, t: any) => {
+        const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+        const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+        return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet' || jenis === 'debit') ? sum - nom : sum + nom;
+      }, 0);
+
+      // Hitung jajan pada periode berjalan jika ada limit (hanya transaksi jajan/kantin/pos)
+      if (limitJajan > 0) {
+        totalJajanPeriod = foundTabunganRows.reduce((sum: number, t: any) => {
+          const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+          const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase().trim();
+          const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
+          const tgl = String(rawDate).split('T')[0];
+          const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
+          
+          const isWithdraw = jenis === 'tarik' || jenis === 'keluar' || jenis.includes('tarik') || jenis.includes('keluar') || jenis === 'debet' || jenis === 'debit';
+          const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
+
+          if (isWithdraw && isJajan && tgl >= startDateStr) {
+            return sum + nom;
+          }
+          return sum;
+        }, 0);
+      }
+    }
+
+    const sisaLimitCalc = limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null;
+    setBuyerData({ 
+      nama: foundSantri.nama, 
+      saldo: saldo, 
+      sisaLimit: sisaLimitCalc,
+      periodeLabel: periodeLabel
+    });
+    setBuyerId(String(foundSantri.nis));
+    
+    if (saldo < getCartTotal()) {
+      playError();
+      showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
+    } else if (limitJajan > 0 && totalJajanPeriod >= limitJajan) {
+      playError();
+      showCheckoutAlert('error', `LIMIT ${periodeLabel.toUpperCase()} HABIS`, `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSudah Terpakai: Rp ${totalJajanPeriod.toLocaleString('id-ID')}\nSisa Limit: Rp 0\n\n(Catatan: Saldo tabungan Rp ${saldo.toLocaleString('id-ID')} masih ada, namun kuota jajan periode ini telah habis)`, foundSantri.nama);
+      setPendingBuyer(null);
+      setPinModalOpen(false);
+    } else if (limitJajan > 0 && (totalJajanPeriod + getCartTotal() > limitJajan)) {
+      playError();
+      const sisaLimit = limitJajan - totalJajanPeriod;
+      showCheckoutAlert('error', 'MELEBIHI LIMIT TABUNGAN', `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSisa Kuota Belanja: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}\nTotal Belanja: Rp ${getCartTotal().toLocaleString('id-ID')}`, foundSantri.nama);
+      setPendingBuyer(null);
+      setPinModalOpen(false);
+    } else {
+      // Saldo dan Limit cukup, tampilkan modal PIN
+      setPendingBuyer(foundSantri);
+      setEnteredPin("");
+      setPinModalOpen(true);
+      setPaymentModalOpen(false); // Tutup modal pembayaran
+      playDing();
+    }
+  };
+
+  const openMultiKasSelection = async (candidates: any[]) => {
+    playDing();
+    toast.info(`Kartu Multi-Kas: Terdeteksi ${candidates.length} akun pada kartu ini.`);
+
+    const enriched = await Promise.all(candidates.map(async (c: any) => {
+      const sNis = String(c.nis || '');
+      const sNisClean = sNis.replace(/^0+/, '');
+      let foundRows: any[] = [];
+      try {
+        const { data: directTab } = await supabase
+          .from('Tabungan')
+          .select('*')
+          .or(`nis.eq.${sNis},nis.eq.${sNisClean}`);
+        if (directTab && directTab.length > 0) foundRows = directTab;
+      } catch (e) {}
+
+      if (foundRows.length === 0 && tabunganMasterData && Array.isArray(tabunganMasterData)) {
+        foundRows = tabunganMasterData.filter((t: any) => 
+          String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
+        );
+      }
+
+      const saldo = foundRows.reduce((sum: number, t: any) => {
+        const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+        const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+        return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet' || jenis === 'debit') ? sum - nom : sum + nom;
+      }, 0);
+
+      return {
+        ...c,
+        calculatedSaldo: saldo
+      };
+    }));
+
+    setMultiKasCandidates(enriched);
+    setModalMultiKasOpen(true);
+  };
+
+  const handleSelectMultiKasAccount = async (chosenSantri: any) => {
+    setModalMultiKasOpen(false);
+    await proceedWithSelectedSantri(chosenSantri);
+  };
+
   const checkSantri = async (overrideId?: string) => {
     const idToCheck = overrideId || buyerId;
     if (!idToCheck) {
@@ -355,7 +529,7 @@ export default function PosPage() {
       if (santriMasterData) {
         const idClean = String(idToCheck).trim();
         const idNoZero = idClean.replace(/^0+/, '').toLowerCase();
-        const foundSantri = santriMasterData.find((s: any) => {
+        const matchingSantri = santriMasterData.filter((s: any) => {
           const sNis = String(s.nis || '').trim();
           const sUid = String(s.uid || '').trim().toLowerCase();
           const sRfid = String(s.rfid || '').trim().toLowerCase();
@@ -364,126 +538,19 @@ export default function PosPage() {
                  sRfid === idClean.toLowerCase() || sRfid.replace(/^0+/, '') === idNoZero;
         });
         
-        if (foundSantri) {
-          let saldo = 0;
-          let totalJajanPeriod = 0;
-
-          const isKamar = String(foundSantri.nis || '').startsWith('KAS-') || (foundSantri.nama || '').toLowerCase().startsWith('kas ');
-          const sNis = String(foundSantri.nis);
-          const sNisClean = sNis.replace(/^0+/, '');
-
-          let limitJajan = 0;
-          let periode = 'harian';
-          let periodeLabel = 'Hari Ini';
-          let startDateStr = '';
-
-          // Akun Dompet Kas Kamar tidak dikenakan limit jajan harian santri
-          if (!isKamar) {
-            let liveConfig = limitConfigData;
-            try {
-              const { data: cfgRow } = await supabase.from('MasterConfig').select('nilai').eq('kunci', 'tabunganLimitConfig').maybeSingle();
-              if (cfgRow?.nilai) liveConfig = JSON.parse(cfgRow.nilai);
-            } catch (e) {}
-
-            const override = liveConfig?.santriLimits?.[sNis] || liveConfig?.santriLimits?.[sNisClean];
-            if (override && override.limit !== undefined) {
-              limitJajan = Number(override.limit);
-              periode = override.periode || 'harian';
-            } else if (liveConfig?.defaultLimit !== undefined && Number(liveConfig.defaultLimit) > 0) {
-              limitJajan = Number(liveConfig.defaultLimit);
-              periode = liveConfig.defaultPeriode || 'harian';
-            } else {
-              limitJajan = Number(foundSantri.limit_jajan_harian || 0);
-              periode = foundSantri.limit_periode || liveConfig?.defaultPeriode || 'harian';
-            }
-
-            startDateStr = getPeriodStartDateWIB(periode);
-            periodeLabel = periode === 'mingguan' ? 'Minggu Ini (Reset Senin)' : periode === 'bulanan' ? 'Bulan Ini' : 'Hari Ini';
-          }
-
-          let foundTabunganRows: any[] = [];
-          try {
-            const { data: directTab } = await supabase
-              .from('Tabungan')
-              .select('*')
-              .or(`nis.eq.${sNis},nis.eq.${sNisClean}`)
-              .order('tanggal', { ascending: false });
-            if (directTab && directTab.length > 0) {
-              foundTabunganRows = directTab;
-            }
-          } catch (e) {
-            console.warn("Direct Supabase fetch fallback:", e);
-          }
-
-          if (foundTabunganRows.length === 0 && tabunganMasterData && Array.isArray(tabunganMasterData)) {
-            foundTabunganRows = tabunganMasterData.filter((t: any) => 
-              String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
-            );
-          }
-
-          if (foundTabunganRows.length > 0) {
-            saldo = foundTabunganRows.reduce((sum: number, t: any) => {
-              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
-              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
-              return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet' || jenis === 'debit') ? sum - nom : sum + nom;
-            }, 0);
-
-            // Hitung jajan pada periode berjalan jika ada limit (hanya transaksi jajan/kantin/pos)
-            if (limitJajan > 0) {
-              totalJajanPeriod = foundTabunganRows.reduce((sum: number, t: any) => {
-                const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
-                const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase().trim();
-                const rawDate = t.Tanggal || t.tanggal || t.created_at || '';
-                const tgl = String(rawDate).split('T')[0];
-                const ket = String(t.Keterangan || t.keterangan || '').toLowerCase();
-                
-                const isWithdraw = jenis === 'tarik' || jenis === 'keluar' || jenis.includes('tarik') || jenis.includes('keluar') || jenis === 'debet' || jenis === 'debit';
-                const isJajan = ket.includes('kantin') || ket.includes('pos') || ket.includes('jajan') || ket.includes('belanja') || ket.includes('kasir') || ket.includes('trx-');
-
-                if (isWithdraw && isJajan && tgl >= startDateStr) {
-                  return sum + nom;
-                }
-                return sum;
-              }, 0);
-            }
-          }
-
-          const sisaLimitCalc = limitJajan > 0 ? (limitJajan - totalJajanPeriod) : null;
-          setBuyerData({ 
-            nama: foundSantri.nama, 
-            saldo: saldo, 
-            sisaLimit: sisaLimitCalc,
-            periodeLabel: periodeLabel
-          });
-          setBuyerId(String(foundSantri.nis));
-          
-          if (saldo < getCartTotal()) {
-            playError();
-            showCheckoutAlert('error', 'SALDO TIDAK MENCUKUPI', `Saldo Saat Ini: Rp ${saldo.toLocaleString('id-ID')}`, foundSantri.nama);
-          } else if (limitJajan > 0 && totalJajanPeriod >= limitJajan) {
-            playError();
-            showCheckoutAlert('error', `LIMIT ${periodeLabel.toUpperCase()} HABIS`, `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSudah Terpakai: Rp ${totalJajanPeriod.toLocaleString('id-ID')}\nSisa Limit: Rp 0\n\n(Catatan: Saldo tabungan Rp ${saldo.toLocaleString('id-ID')} masih ada, namun kuota jajan periode ini telah habis)`, foundSantri.nama);
-            setPendingBuyer(null);
-            setPinModalOpen(false);
-          } else if (limitJajan > 0 && (totalJajanPeriod + getCartTotal() > limitJajan)) {
-            playError();
-            const sisaLimit = limitJajan - totalJajanPeriod;
-            showCheckoutAlert('error', 'MELEBIHI LIMIT TABUNGAN', `Batas Limit: Rp ${limitJajan.toLocaleString('id-ID')} (${periodeLabel})\nSisa Kuota Belanja: Rp ${(sisaLimit > 0 ? sisaLimit : 0).toLocaleString('id-ID')}\nTotal Belanja: Rp ${getCartTotal().toLocaleString('id-ID')}`, foundSantri.nama);
-            setPendingBuyer(null);
-            setPinModalOpen(false);
-          } else {
-            // Saldo dan Limit cukup, tampilkan modal PIN
-            setPendingBuyer(foundSantri);
-            setEnteredPin("");
-            setPinModalOpen(true);
-            setPaymentModalOpen(false); // Tutup modal pembayaran
-            playDing();
-          }
-        } else {
-          toast.error("Santri tidak ditemukan di master data!");
+        if (matchingSantri.length === 0) {
+          toast.error("Santri atau Akun Kas tidak ditemukan di master data!");
           setBuyerData(null);
           playError();
+          return;
         }
+
+        if (matchingSantri.length > 1) {
+          await openMultiKasSelection(matchingSantri);
+          return;
+        }
+
+        await proceedWithSelectedSantri(matchingSantri[0]);
       } else {
         toast.error("Data master santri belum siap. Tunggu sebentar.");
       }
@@ -503,9 +570,9 @@ export default function PosPage() {
       let currentSantriList = santriMasterData;
       let currentTabunganList = tabunganMasterData;
 
-      const matchSantri = (list: any[]) => {
-        if (!Array.isArray(list)) return null;
-        return list.find((s: any) => {
+      const matchSantriList = (list: any[]) => {
+        if (!Array.isArray(list)) return [];
+        return list.filter((s: any) => {
           const nis = String(s.nis || '').trim();
           const uid = String(s.uid || '').trim();
           const rfid = String(s.rfid || '').trim();
@@ -515,8 +582,8 @@ export default function PosPage() {
         });
       };
 
-      let found = matchSantri(currentSantriList);
-      if (!found || !currentTabunganList) {
+      let foundList = matchSantriList(currentSantriList);
+      if (foundList.length === 0 || !currentTabunganList) {
         try {
           const [resS, resT] = await Promise.all([
             api.get('getSantri', { params: { spreadsheetId: "1jrUrg3DVS0migGJdWuzaRj4WJ65hS_ZSPG7y7bwPHe0" } }),
@@ -524,7 +591,7 @@ export default function PosPage() {
           ]);
           if (resS?.data) {
             currentSantriList = resS.data;
-            found = matchSantri(currentSantriList);
+            foundList = matchSantriList(currentSantriList);
           }
           if (resT?.data) currentTabunganList = resT.data;
         } catch (fetchErr) {
@@ -532,7 +599,75 @@ export default function PosPage() {
         }
       }
 
-      if (found) {
+      if (foundList.length > 0) {
+        // Jika terdapat lebih dari 1 akun pada kartu ini (Multi-Kas)
+        if (foundList.length > 1) {
+          const enrichedMulti = await Promise.all(foundList.map(async (acc: any) => {
+            const sNis = String(acc.nis || '');
+            const sNisClean = sNis.replace(/^0+/, '');
+            let fRows: any[] = [];
+            try {
+              const { data: dTab } = await supabase
+                .from('Tabungan')
+                .select('*')
+                .or(`nis.eq.${sNis},nis.eq.${sNisClean}`)
+                .order('tanggal', { ascending: false });
+              if (dTab && dTab.length > 0) fRows = dTab;
+            } catch (e) {}
+
+            if (fRows.length === 0 && currentTabunganList && Array.isArray(currentTabunganList)) {
+              fRows = currentTabunganList.filter((t: any) => 
+                String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
+              );
+            }
+
+            const accSaldo = fRows.reduce((sum: number, t: any) => {
+              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+              return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet') ? sum - nom : sum + nom;
+            }, 0);
+
+            const sRows = [...fRows].sort((a: any, b: any) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+            const mRecent = sRows.slice(0, 3).map((t: any) => ({
+              tanggal: t.tanggal || t.Tanggal || '-',
+              jenis: t.jenis || t.Jenis || 'Setor',
+              nominal: Number(t.nominal || t.Nominal || 0),
+              keterangan: t.keterangan || t.Keterangan || ''
+            }));
+
+            const isK = String(acc.nis || '').startsWith('KAS-') || (acc.nama || '').toLowerCase().startsWith('kas ') || String(acc.kelas || '').toLowerCase() === 'asrama';
+
+            return {
+              nama: acc.nama,
+              nis: acc.nis,
+              kelas: acc.kelas,
+              saldo: accSaldo,
+              hasPin: !!acc.pin,
+              isKamar: isK,
+              mutasi: mRecent
+            };
+          }));
+
+          const primary = enrichedMulti[0];
+          setActiveQuickCekKasNis(primary.nis);
+          setModalCekSaldoData({
+            status: 'success',
+            nama: primary.nama,
+            nis: primary.nis,
+            kelas: primary.kelas,
+            saldo: primary.saldo,
+            isKamar: true,
+            hasPin: primary.hasPin,
+            mutasi: primary.mutasi,
+            multiKasList: enrichedMulti
+          });
+          playDing();
+          setModalCekSaldoInput("");
+          return;
+        }
+
+        // Single Match
+        const found = foundList[0];
         const isKamar = String(found.nis || '').startsWith('KAS-') || 
                         (found.nama || '').toLowerCase().startsWith('kas ') || 
                         String(found.kelas || '').toLowerCase() === 'asrama';
@@ -640,7 +775,8 @@ export default function PosPage() {
           limitJajan: limitJajan,
           sisaLimit: sisaLimitCalc,
           periodeLabel: periodeLabel,
-          mutasi: recentMutasi
+          mutasi: recentMutasi,
+          multiKasList: undefined
         });
         playDing();
         setModalCekSaldoInput("");
@@ -2281,17 +2417,62 @@ export default function PosPage() {
                 <div className={`p-5 border-4 rounded-xl space-y-3 ${
                   modalCekSaldoData.isKamar ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' : 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20'
                 }`}>
+                  {/* Selector Tab jika Kartu Multi-Kas */}
+                  {modalCekSaldoData.multiKasList && modalCekSaldoData.multiKasList.length > 1 && (
+                    <div className="space-y-1.5 pb-3 border-b-2 border-border/40">
+                      <div className="flex items-center justify-between text-[11px] font-mono font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                        <span className="flex items-center gap-1">
+                          <Layers className="w-3.5 h-3.5" /> KARTU MULTI-KAS ({modalCekSaldoData.multiKasList.length} DOMPET KAS)
+                        </span>
+                        <span>Klik untuk lihat rincian</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {modalCekSaldoData.multiKasList.map(mk => {
+                          const isSelected = (activeQuickCekKasNis || modalCekSaldoData.nis) === mk.nis;
+                          return (
+                            <button
+                              key={mk.nis}
+                              type="button"
+                              onClick={() => {
+                                setActiveQuickCekKasNis(mk.nis);
+                                setModalCekSaldoData(prev => ({
+                                  ...prev,
+                                  nama: mk.nama,
+                                  nis: mk.nis,
+                                  kelas: mk.kelas,
+                                  saldo: mk.saldo,
+                                  isKamar: mk.isKamar,
+                                  hasPin: mk.hasPin,
+                                  mutasi: mk.mutasi
+                                }));
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
+                                isSelected 
+                                  ? 'bg-indigo-600 text-white shadow-xs scale-102 ring-2 ring-indigo-500/30' 
+                                  : 'bg-background hover:bg-muted text-foreground border border-border'
+                              }`}
+                            >
+                              <Building2 className="w-3.5 h-3.5" />
+                              <span>{mk.nama}</span>
+                              <span className="opacity-80 text-[10px] font-normal">(Rp {mk.saldo.toLocaleString('id-ID')})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono uppercase tracking-wider mb-1.5 text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900">
                         {modalCekSaldoData.isKamar ? <Building2 className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5" />}
-                        {modalCekSaldoData.isKamar ? 'KARTU KAS KAMAR' : 'KARTU SANTRI'}
+                        {modalCekSaldoData.isKamar ? 'KARTU KAS / EKSKUL' : 'KARTU SANTRI'}
                       </div>
                       <h4 className="text-xl font-black uppercase text-foreground leading-tight">
                         {modalCekSaldoData.nama}
                       </h4>
                       <p className="font-mono text-xs text-muted-foreground mt-0.5">
-                        NO: {modalCekSaldoData.nis} • {modalCekSaldoData.isKamar ? `ASRAMA: ${modalCekSaldoData.kelas || '-'}` : `KELAS: ${modalCekSaldoData.kelas || '-'}`}
+                        NO: {modalCekSaldoData.nis} • {modalCekSaldoData.isKamar ? `BAGIAN: ${modalCekSaldoData.kelas || 'Asrama'}` : `KELAS: ${modalCekSaldoData.kelas || '-'}`}
                       </p>
                     </div>
 
@@ -2388,6 +2569,95 @@ export default function PosPage() {
                 className="font-bold text-xs"
               >
                 TUTUP
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PILIH SUMBER DANA KAS / EKSKUL (MULTI-KAS 1 KARTU) */}
+      {modalMultiKasOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border-4 border-foreground w-full max-w-lg p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] space-y-4">
+            <div className="flex justify-between items-start border-b-2 border-border pb-3">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider mb-1 bg-indigo-600 text-white">
+                  <Layers className="w-3.5 h-3.5" /> KARTU MULTI-KAS TERDETEKSI
+                </div>
+                <h3 className="text-xl font-black uppercase text-foreground leading-tight">
+                  PILIH SUMBER DANA KAS
+                </h3>
+                <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                  1 Kartu fisik ini menampung {multiKasCandidates.length} dompet kas. Pilih sumber dana belanja:
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setModalMultiKasOpen(false)}
+                className="h-8 w-8 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-xl border-2 border-border flex justify-between items-center font-mono">
+              <span className="text-xs text-muted-foreground uppercase font-bold">TOTAL BELANJA SAAT INI:</span>
+              <span className="text-lg font-black text-primary">Rp {getCartTotal().toLocaleString('id-ID')}</span>
+            </div>
+
+            <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+              {multiKasCandidates.map((c: any) => {
+                const sld = Number(c.calculatedSaldo || 0);
+                const isSufficient = sld >= getCartTotal();
+
+                return (
+                  <div
+                    key={c.nis}
+                    onClick={() => handleSelectMultiKasAccount(c)}
+                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex justify-between items-center gap-3 ${
+                      isSufficient 
+                        ? 'border-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 hover:scale-[1.01]' 
+                        : 'border-border bg-muted/30 opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200 shrink-0">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-black text-sm uppercase text-foreground flex items-center gap-2">
+                          {c.nama}
+                        </div>
+                        <div className="font-mono text-[11px] text-muted-foreground">
+                          NO: {c.nis} {c.kelas ? `• ${c.kelas}` : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase font-semibold">Saldo Kas</div>
+                      <div className={`font-mono font-black text-base ${isSufficient ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>
+                        Rp {sld.toLocaleString('id-ID')}
+                      </div>
+                      {!isSufficient && (
+                        <span className="text-[9px] font-mono font-bold text-rose-600 uppercase">
+                          Saldo Kurang
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t-2 border-border flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setModalMultiKasOpen(false)}
+                className="font-bold uppercase text-xs"
+              >
+                Batal
               </Button>
             </div>
           </div>

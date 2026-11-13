@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History, Sparkles, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History, Sparkles, Clock, AlertCircle, CheckCircle2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/axios";
@@ -16,6 +16,7 @@ export default function CekSaldoPage() {
   const { playDing, playError } = useAudio();
   const [cekSaldoInput, setCekSaldoInput] = useState("");
   const [checkingLive, setCheckingLive] = useState(false);
+  const [activeMultiKasIdx, setActiveMultiKasIdx] = useState(0);
   const [cekSaldoData, setCekSaldoData] = useState<{
     status: 'idle' | 'success' | 'error';
     nama?: string;
@@ -33,6 +34,15 @@ export default function CekSaldoPage() {
     sisaLimit?: number | null;
     persentaseLimit?: number;
     mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
+    multiKasList?: Array<{
+      nama: string;
+      nis: string;
+      kelas?: string;
+      saldo: number;
+      pin?: string;
+      isKamar: boolean;
+      mutasi: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
+    }>;
   }>({ status: 'idle' });
 
   const [testPinInput, setTestPinInput] = useState("");
@@ -77,9 +87,9 @@ export default function CekSaldoPage() {
       const cleanId = String(id).trim();
       const cleanNoZero = cleanId.replace(/^0+/, '').toLowerCase();
 
-      const matchSantri = (list: any[]) => {
-        if (!Array.isArray(list)) return null;
-        return list.find((s: any) => {
+      const matchSantriList = (list: any[]) => {
+        if (!Array.isArray(list)) return [];
+        return list.filter((s: any) => {
           const nis = String(s.nis || '').trim();
           const uid = String(s.uid || '').trim();
           const rfid = String(s.rfid || '').trim();
@@ -89,10 +99,10 @@ export default function CekSaldoPage() {
         });
       };
 
-      let foundSantri = matchSantri(currentSantriList);
+      let foundMatches = matchSantriList(currentSantriList);
 
       // Jika belum ditemukan di cache atau ingin data mutasi paling mutakhir, fallback ke live query
-      if (!foundSantri || !currentTabunganList) {
+      if (foundMatches.length === 0 || !currentTabunganList) {
         try {
           const [resS, resT] = await Promise.all([
             api.get('getSantri', { params: { spreadsheetId: "1jrUrg3DVS0migGJdWuzaRj4WJ65hS_ZSPG7y7bwPHe0" } }),
@@ -100,7 +110,7 @@ export default function CekSaldoPage() {
           ]);
           if (resS?.data) {
             currentSantriList = resS.data;
-            foundSantri = matchSantri(currentSantriList);
+            foundMatches = matchSantriList(currentSantriList);
           }
           if (resT?.data) {
             currentTabunganList = resT.data;
@@ -110,10 +120,73 @@ export default function CekSaldoPage() {
         }
       }
 
-      if (foundSantri) {
+      if (foundMatches.length > 0) {
+        // Jika kartu menampung banyak akun kas / ekskul (Multi-Kas)
+        if (foundMatches.length > 1) {
+          const enrichedMulti = foundMatches.map((acc: any) => {
+            const sNisClean = String(acc.nis).replace(/^0+/, '');
+            let fRows: any[] = [];
+            if (currentTabunganList && Array.isArray(currentTabunganList)) {
+              fRows = currentTabunganList.filter((t: any) => 
+                String(t.NIS || t.nis).replace(/^0+/, '') === sNisClean
+              );
+            }
+            const accSaldo = fRows.reduce((sum: number, t: any) => {
+              const nom = Number(t.Nominal || t.nominal || t.Saldo || t.saldo || 0);
+              const jenis = String(t.Jenis || t.jenis || 'Setor').toLowerCase();
+              return (jenis === 'tarik' || jenis === 'keluar' || jenis === 'debet') ? sum - nom : sum + nom;
+            }, 0);
+
+            const sortedRows = [...fRows].reverse();
+            const mRecent = sortedRows.slice(0, 3).map((t: any) => ({
+              tanggal: t.tanggal || t.Tanggal || '-',
+              jenis: t.jenis || t.Jenis || 'Setor',
+              nominal: Number(t.nominal || t.Nominal || 0),
+              keterangan: t.keterangan || t.Keterangan || ''
+            }));
+
+            const isK = String(acc.nis || '').startsWith('KAS-') || 
+                        (acc.nama || '').toLowerCase().startsWith('kas ') || 
+                        String(acc.kelas || '').toLowerCase() === 'asrama' ||
+                        String(acc.kelas || '').toLowerCase() === 'ekskul';
+
+            return {
+              nama: acc.nama,
+              nis: acc.nis,
+              kelas: acc.kelas,
+              saldo: accSaldo,
+              pin: acc.pin ? String(acc.pin) : '',
+              isKamar: isK,
+              mutasi: mRecent
+            };
+          });
+
+          setActiveMultiKasIdx(0);
+          const activeOne = enrichedMulti[0];
+          setCekSaldoData({
+            status: 'success',
+            nama: activeOne.nama,
+            saldo: activeOne.saldo,
+            isKamar: true,
+            nis: activeOne.nis,
+            kelas: activeOne.kelas,
+            pin: activeOne.pin,
+            mutasi: activeOne.mutasi,
+            multiKasList: enrichedMulti
+          });
+          setTestPinInput("");
+          setTestPinResult('idle');
+          setShowPinTest(false);
+          playDing();
+          setCekSaldoInput("");
+          return;
+        }
+
+        const foundSantri = foundMatches[0];
         const isKamar = String(foundSantri.nis || '').startsWith('KAS-') || 
                         (foundSantri.nama || '').toLowerCase().startsWith('kas ') || 
-                        String(foundSantri.kelas || '').toLowerCase() === 'asrama';
+                        String(foundSantri.kelas || '').toLowerCase() === 'asrama' ||
+                        String(foundSantri.kelas || '').toLowerCase() === 'ekskul';
 
         let saldo = 0;
         let recentMutasi: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }> = [];
@@ -222,7 +295,8 @@ export default function CekSaldoPage() {
           terpakaiLimit,
           sisaLimit,
           persentaseLimit,
-          mutasi: recentMutasi
+          mutasi: recentMutasi,
+          multiKasList: undefined
         });
         setTestPinInput("");
         setTestPinResult('idle');
@@ -293,8 +367,54 @@ export default function CekSaldoPage() {
             {cekSaldoData.status === 'success' && (
               cekSaldoData.isKamar ? (
                 <div className="bg-indigo-600/10 border-4 border-indigo-600 p-6 md:p-8 flex flex-col items-center text-center animate-in zoom-in duration-300 w-full h-full justify-center rounded-2xl relative shadow-md">
+                  {/* Selector Tab jika Kartu Multi-Kas */}
+                  {cekSaldoData.multiKasList && cekSaldoData.multiKasList.length > 1 && (
+                    <div className="w-full mb-4 pb-4 border-b-2 border-indigo-600/30">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-700 text-white font-mono text-xs font-bold uppercase tracking-wider mb-2">
+                        <Layers className="w-4 h-4" /> KARTU MULTI-KAS ({cekSaldoData.multiKasList.length} DOMPET KAS/EKSKUL)
+                      </div>
+                      <p className="text-xs text-indigo-900 dark:text-indigo-200 mb-2 font-mono">
+                        Total Gabungan Saldo di Kartu ini: <strong className="text-emerald-700 dark:text-emerald-400 font-black">Rp {cekSaldoData.multiKasList.reduce((sum, item) => sum + item.saldo, 0).toLocaleString('id-ID')}</strong>
+                      </p>
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {cekSaldoData.multiKasList.map((item, idx) => {
+                          const isSelected = activeMultiKasIdx === idx;
+                          return (
+                            <button
+                              key={item.nis}
+                              type="button"
+                              onClick={() => {
+                                setActiveMultiKasIdx(idx);
+                                setCekSaldoData(prev => ({
+                                  ...prev,
+                                  nama: item.nama,
+                                  nis: item.nis,
+                                  kelas: item.kelas,
+                                  saldo: item.saldo,
+                                  pin: item.pin,
+                                  mutasi: item.mutasi
+                                }));
+                                setTestPinInput("");
+                                setTestPinResult('idle');
+                              }}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
+                                isSelected 
+                                  ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-500/40' 
+                                  : 'bg-white/80 dark:bg-black/30 hover:bg-white text-indigo-950 dark:text-indigo-200 border border-indigo-200'
+                              }`}
+                            >
+                              <Building2 className="w-3.5 h-3.5" />
+                              <span>{item.nama}</span>
+                              <span className="opacity-80 font-normal text-[10px]">(Rp {item.saldo.toLocaleString('id-ID')})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-600 text-white font-mono text-xs font-bold uppercase tracking-wider mb-3 shadow-sm">
-                    <Building2 className="w-4 h-4" /> KARTU KAS KAMAR / ASRAMA
+                    <Building2 className="w-4 h-4" /> {cekSaldoData.multiKasList && cekSaldoData.multiKasList.length > 1 ? 'KARTU MULTI-KAS AKTIF' : 'KARTU KAS BERSAMA / EKSKUL'}
                   </div>
                   <p className="text-2xl md:text-3xl font-black uppercase text-indigo-950 dark:text-indigo-200 mb-1">
                     {cekSaldoData.nama}
