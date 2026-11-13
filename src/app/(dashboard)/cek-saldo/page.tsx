@@ -137,7 +137,7 @@ export default function CekSaldoPage() {
 
       const matchSantriList = (list: any[]) => {
         if (!Array.isArray(list)) return [];
-        return list.filter((s: any) => {
+        const exactMatches = list.filter((s: any) => {
           const nis = String(s.nis || '').trim();
           const uid = String(s.uid || '').trim();
           const rfid = String(s.rfid || '').trim();
@@ -145,6 +145,15 @@ export default function CekSaldoPage() {
                  uid.toLowerCase() === cleanId.toLowerCase() || uid.replace(/^0+/, '').toLowerCase() === cleanNoZero ||
                  rfid.toLowerCase() === cleanId.toLowerCase() || rfid.replace(/^0+/, '').toLowerCase() === cleanNoZero;
         });
+        if (exactMatches.length > 0) return exactMatches;
+        if (cleanId.length >= 2) {
+          const q = cleanId.toLowerCase();
+          return list.filter((s: any) => 
+            String(s.nama || '').toLowerCase().includes(q) ||
+            String(s.nis || '').toLowerCase().includes(q)
+          );
+        }
+        return [];
       };
 
       let foundMatches = matchSantriList(currentSantriList);
