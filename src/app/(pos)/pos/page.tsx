@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
-import { Search, ArrowLeft, ArrowRight, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History, Layers, Sparkles } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight, Trash2, CreditCard, Receipt, Loader2, Filter, QrCode, X, CheckCircle2, FileText, Download, LogOut, Camera, RefreshCw, ShoppingBag, ArrowUpRight , Copy, Wallet, Building2, ShieldCheck, History, Layers, Sparkles, Lock, Unlock, Key } from "lucide-react";
 import { usePosStore, Product } from "@/store/posStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,12 +113,16 @@ export default function PosPage() {
   const [modalCekSaldoOpen, setModalCekSaldoOpen] = useState(false);
   const [modalCekSaldoInput, setModalCekSaldoInput] = useState("");
   const [modalCekSaldoLoading, setModalCekSaldoLoading] = useState(false);
+  const [quickCekUnlockedNisList, setQuickCekUnlockedNisList] = useState<string[]>([]);
+  const [quickCekPinInput, setQuickCekPinInput] = useState("");
+  const [quickCekPinError, setQuickCekPinError] = useState<string | null>(null);
   const [modalCekSaldoData, setModalCekSaldoData] = useState<{
     status: 'idle' | 'success' | 'error';
     nama?: string;
     nis?: string;
     kelas?: string;
     saldo?: number;
+    pin?: string;
     isKamar?: boolean;
     hasPin?: boolean;
     message?: string;
@@ -131,6 +135,7 @@ export default function PosPage() {
       nis: string;
       kelas?: string;
       saldo: number;
+      pin?: string;
       hasPin: boolean;
       isKamar: boolean;
       mutasi?: Array<{ tanggal: string; jenis: string; nominal: number; keterangan: string }>;
@@ -560,9 +565,56 @@ export default function PosPage() {
     }
   };
 
+  const handleQuickCekUnlockKas = (overridePin?: string) => {
+    const inputVal = (overridePin !== undefined ? overridePin : quickCekPinInput).trim();
+    if (!inputVal) return;
+
+    const currentExpected = modalCekSaldoData.pin || '123456';
+    if (inputVal === currentExpected) {
+      if (modalCekSaldoData.nis) {
+        setQuickCekUnlockedNisList(prev => [...prev.filter(n => n !== modalCekSaldoData.nis), modalCekSaldoData.nis!]);
+      }
+      setQuickCekPinInput("");
+      setQuickCekPinError(null);
+      playDing();
+      toast.success(`Saldo kas ${modalCekSaldoData.nama} berhasil dibuka!`);
+      return;
+    }
+
+    if (modalCekSaldoData.multiKasList && modalCekSaldoData.multiKasList.length > 1) {
+      const matchedIdx = modalCekSaldoData.multiKasList.findIndex(mk => (mk.pin || '123456') === inputVal);
+      if (matchedIdx !== -1) {
+        const matched = modalCekSaldoData.multiKasList[matchedIdx];
+        setActiveQuickCekKasNis(matched.nis);
+        setModalCekSaldoData(prev => ({
+          ...prev,
+          nama: matched.nama,
+          nis: matched.nis,
+          kelas: matched.kelas,
+          saldo: matched.saldo,
+          pin: matched.pin,
+          hasPin: matched.hasPin,
+          mutasi: matched.mutasi
+        }));
+        setQuickCekUnlockedNisList(prev => [...prev.filter(n => n !== matched.nis), matched.nis]);
+        setQuickCekPinInput("");
+        setQuickCekPinError(null);
+        playDing();
+        toast.success(`Saldo kas ${matched.nama} berhasil dibuka!`);
+        return;
+      }
+    }
+
+    setQuickCekPinError("PIN Salah! Anda tidak memiliki izin untuk melihat saldo kas ini.");
+    playError();
+  };
+
   const handleQuickCekSaldo = async (id: string) => {
     if (!id) return;
     setModalCekSaldoLoading(true);
+    setQuickCekUnlockedNisList([]);
+    setQuickCekPinInput("");
+    setQuickCekPinError(null);
     try {
       const cleanId = String(id).trim();
       const cleanNoZero = cleanId.replace(/^0+/, '').toLowerCase();
@@ -642,6 +694,7 @@ export default function PosPage() {
               nis: acc.nis,
               kelas: acc.kelas,
               saldo: accSaldo,
+              pin: acc.pin ? String(acc.pin) : '',
               hasPin: !!acc.pin,
               isKamar: isK,
               mutasi: mRecent
@@ -656,6 +709,7 @@ export default function PosPage() {
             nis: primary.nis,
             kelas: primary.kelas,
             saldo: primary.saldo,
+            pin: primary.pin,
             isKamar: true,
             hasPin: primary.hasPin,
             mutasi: primary.mutasi,
@@ -770,6 +824,7 @@ export default function PosPage() {
           nis: found.nis,
           kelas: found.kelas,
           saldo: saldo,
+          pin: found.pin ? String(found.pin) : '',
           isKamar: isKamar,
           hasPin: !!found.pin,
           limitJajan: limitJajan,
@@ -2429,6 +2484,7 @@ export default function PosPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {modalCekSaldoData.multiKasList.map(mk => {
                           const isSelected = (activeQuickCekKasNis || modalCekSaldoData.nis) === mk.nis;
+                          const isItemUnlocked = quickCekUnlockedNisList.includes(mk.nis);
                           return (
                             <button
                               key={mk.nis}
@@ -2441,10 +2497,13 @@ export default function PosPage() {
                                   nis: mk.nis,
                                   kelas: mk.kelas,
                                   saldo: mk.saldo,
+                                  pin: mk.pin,
                                   isKamar: mk.isKamar,
                                   hasPin: mk.hasPin,
                                   mutasi: mk.mutasi
                                 }));
+                                setQuickCekPinInput("");
+                                setQuickCekPinError(null);
                               }}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
                                 isSelected 
@@ -2452,9 +2511,13 @@ export default function PosPage() {
                                   : 'bg-background hover:bg-muted text-foreground border border-border'
                               }`}
                             >
-                              <Building2 className="w-3.5 h-3.5" />
+                              {isItemUnlocked ? <Unlock className="w-3 h-3 text-emerald-400" /> : <Lock className="w-3 h-3 opacity-60" />}
                               <span>{mk.nama}</span>
-                              <span className="opacity-80 text-[10px] font-normal">(Rp {mk.saldo.toLocaleString('id-ID')})</span>
+                              {isItemUnlocked ? (
+                                <span className="opacity-90 text-[10px] font-bold text-emerald-300">(Rp {mk.saldo.toLocaleString('id-ID')})</span>
+                              ) : (
+                                <span className="opacity-60 text-[10px] font-normal">(Terkunci)</span>
+                              )}
                             </button>
                           );
                         })}
@@ -2483,68 +2546,126 @@ export default function PosPage() {
                     )}
                   </div>
 
-                  <div className="pt-2 border-t-2 border-border/40">
-                    <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest block font-bold">
-                      SISA SALDO SAAT INI:
-                    </span>
-                    <p className={`text-3xl font-mono font-black tracking-tight ${
-                      modalCekSaldoData.isKamar ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'
-                    }`}>
-                      Rp {(modalCekSaldoData.saldo || 0).toLocaleString('id-ID')}
-                    </p>
-                  </div>
-
-                  {!modalCekSaldoData.isKamar && modalCekSaldoData.limitJajan !== undefined && (
-                    <div className={`p-3 rounded-xl border-2 font-mono text-xs ${
-                      modalCekSaldoData.limitJajan === 0 
-                        ? 'bg-slate-100/70 border-slate-200 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300'
-                        : (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
-                          ? 'bg-rose-100/80 border-rose-400 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
-                          : 'bg-amber-100/70 border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
-                    }`}>
-                      <div className="flex justify-between items-center font-bold">
-                        <span className="uppercase flex items-center gap-1.5">
-                          <Wallet className="w-3.5 h-3.5" /> Limit Jajan ({modalCekSaldoData.periodeLabel || 'Hari Ini'}):
-                        </span>
-                        <span>{modalCekSaldoData.limitJajan > 0 ? `Rp ${modalCekSaldoData.limitJajan.toLocaleString('id-ID')}` : 'Bebas (Tanpa Limit)'}</span>
-                      </div>
-                      {modalCekSaldoData.limitJajan > 0 && (
-                        <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-border/40 font-bold">
-                          <span>Sisa Limit Tersedia:</span>
-                          <span className={`text-sm ${
-                            (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
-                              ? 'text-rose-600 dark:text-rose-400 font-black'
-                              : 'text-emerald-700 dark:text-emerald-400 font-black'
-                          }`}>
-                            {(modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
-                              ? 'HABIS (Rp 0)'
-                              : `Rp ${(modalCekSaldoData.sisaLimit || 0).toLocaleString('id-ID')}`
-                            }
-                          </span>
+                  {modalCekSaldoData.isKamar && !quickCekUnlockedNisList.includes(modalCekSaldoData.nis || '') ? (
+                    <div className="pt-2 border-t-2 border-border/40 text-center space-y-2.5">
+                      <div className="p-3 bg-card border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-2">
+                        <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                          <Lock className="w-4 h-4 text-indigo-600" /> Saldo Terkunci dengan PIN
                         </div>
-                      )}
-                    </div>
-                  )}
-
-                  {modalCekSaldoData.mutasi && modalCekSaldoData.mutasi.length > 0 && (
-                    <div className="pt-2 border-t-2 border-border/40 space-y-1.5">
-                      <div className="flex items-center gap-1 text-[10px] font-bold font-mono uppercase text-muted-foreground">
-                        <History className="w-3 h-3" /> Mutasi Terakhir:
+                        <p className="text-[11px] text-muted-foreground">
+                          Masukkan PIN 6 Digit untuk melihat saldo <strong>{modalCekSaldoData.nama}</strong>:
+                        </p>
+                        <form onSubmit={(e) => { e.preventDefault(); handleQuickCekUnlockKas(); }} className="space-y-2">
+                          <Input
+                            type="password"
+                            inputMode="numeric"
+                            maxLength={6}
+                            autoFocus
+                            placeholder="••••••"
+                            value={quickCekPinInput}
+                            onChange={(e) => {
+                              setQuickCekPinInput(e.target.value.replace(/\D/g, ''));
+                              setQuickCekPinError(null);
+                            }}
+                            className="font-mono text-center tracking-[0.4em] text-base h-9 bg-background border-border font-bold max-w-[180px] mx-auto"
+                          />
+                          {quickCekPinError && (
+                            <p className="text-[11px] font-semibold text-rose-600">
+                              {quickCekPinError}
+                            </p>
+                          )}
+                          <Button
+                            type="submit"
+                            disabled={quickCekPinInput.length < 4}
+                            size="sm"
+                            className="h-8 font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4"
+                          >
+                            <Key className="w-3.5 h-3.5 mr-1" /> Buka Saldo
+                          </Button>
+                        </form>
                       </div>
-                      <div className="space-y-1 font-mono text-[11px]">
-                        {modalCekSaldoData.mutasi.map((m, idx) => {
-                          const isTarik = String(m.jenis).toLowerCase() === 'tarik';
-                          return (
-                            <div key={idx} className="flex justify-between items-center p-1.5 rounded bg-background/80 border border-border/60">
-                              <span className="truncate max-w-[200px] text-muted-foreground">{m.keterangan || (isTarik ? 'Belanja' : 'Setor')}</span>
-                              <span className={`font-bold shrink-0 ${isTarik ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {isTarik ? '-' : '+'} Rp {m.nominal.toLocaleString('id-ID')}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="pt-2 border-t-2 border-border/40 flex justify-between items-end">
+                        <div>
+                          <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest block font-bold">
+                            SISA SALDO SAAT INI:
+                          </span>
+                          <p className={`text-3xl font-mono font-black tracking-tight ${
+                            modalCekSaldoData.isKamar ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'
+                          }`}>
+                            Rp {(modalCekSaldoData.saldo || 0).toLocaleString('id-ID')}
+                          </p>
+                        </div>
+                        {modalCekSaldoData.isKamar && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickCekUnlockedNisList(prev => prev.filter(n => n !== modalCekSaldoData.nis));
+                              setQuickCekPinInput("");
+                              setQuickCekPinError(null);
+                            }}
+                            className="text-[10px] font-mono text-muted-foreground hover:text-rose-600 underline"
+                          >
+                            Kunci Kembali
+                          </button>
+                        )}
+                      </div>
+
+                      {!modalCekSaldoData.isKamar && modalCekSaldoData.limitJajan !== undefined && (
+                        <div className={`p-3 rounded-xl border-2 font-mono text-xs ${
+                          modalCekSaldoData.limitJajan === 0 
+                            ? 'bg-slate-100/70 border-slate-200 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300'
+                            : (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                              ? 'bg-rose-100/80 border-rose-400 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+                              : 'bg-amber-100/70 border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                        }`}>
+                          <div className="flex justify-between items-center font-bold">
+                            <span className="uppercase flex items-center gap-1.5">
+                              <Wallet className="w-3.5 h-3.5" /> Limit Jajan ({modalCekSaldoData.periodeLabel || 'Hari Ini'}):
+                            </span>
+                            <span>{modalCekSaldoData.limitJajan > 0 ? `Rp ${modalCekSaldoData.limitJajan.toLocaleString('id-ID')}` : 'Bebas (Tanpa Limit)'}</span>
+                          </div>
+                          {modalCekSaldoData.limitJajan > 0 && (
+                            <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-border/40 font-bold">
+                              <span>Sisa Limit Tersedia:</span>
+                              <span className={`text-sm ${
+                                (modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                                  ? 'text-rose-600 dark:text-rose-400 font-black'
+                                  : 'text-emerald-700 dark:text-emerald-400 font-black'
+                              }`}>
+                                {(modalCekSaldoData.sisaLimit !== null && modalCekSaldoData.sisaLimit !== undefined && modalCekSaldoData.sisaLimit <= 0)
+                                  ? 'HABIS (Rp 0)'
+                                  : `Rp ${(modalCekSaldoData.sisaLimit || 0).toLocaleString('id-ID')}`
+                                }
                               </span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                          )}
+                        </div>
+                      )}
+
+                      {modalCekSaldoData.mutasi && modalCekSaldoData.mutasi.length > 0 && (
+                        <div className="pt-2 border-t-2 border-border/40 space-y-1.5">
+                          <div className="flex items-center gap-1 text-[10px] font-bold font-mono uppercase text-muted-foreground">
+                            <History className="w-3 h-3" /> Mutasi Terakhir:
+                          </div>
+                          <div className="space-y-1 font-mono text-[11px]">
+                            {modalCekSaldoData.mutasi.map((m, idx) => {
+                              const isTarik = String(m.jenis).toLowerCase() === 'tarik';
+                              return (
+                                <div key={idx} className="flex justify-between items-center p-1.5 rounded bg-background/80 border border-border/60">
+                                  <span className="truncate max-w-[200px] text-muted-foreground">{m.keterangan || (isTarik ? 'Belanja' : 'Setor')}</span>
+                                  <span className={`font-bold shrink-0 ${isTarik ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                    {isTarik ? '-' : '+'} Rp {m.nominal.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

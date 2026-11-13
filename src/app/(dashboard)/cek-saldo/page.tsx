@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History, Sparkles, Clock, AlertCircle, CheckCircle2, Layers } from "lucide-react";
+import { Wallet, CreditCard, Loader2, Camera, X, Building2, ShieldCheck, Key, Check, History, Sparkles, Clock, AlertCircle, CheckCircle2, Layers, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/axios";
@@ -45,9 +45,9 @@ export default function CekSaldoPage() {
     }>;
   }>({ status: 'idle' });
 
-  const [testPinInput, setTestPinInput] = useState("");
-  const [testPinResult, setTestPinResult] = useState<'idle' | 'correct' | 'wrong'>('idle');
-  const [showPinTest, setShowPinTest] = useState(false);
+  const [unlockedKasNisList, setUnlockedKasNisList] = useState<string[]>([]);
+  const [kasPinInput, setKasPinInput] = useState("");
+  const [kasPinError, setKasPinError] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data: santriMasterData, isLoading: santriLoading } = useQuery({
@@ -77,9 +77,57 @@ export default function CekSaldoPage() {
     refetchOnWindowFocus: false,
   });
 
+  const handleUnlockKas = (overridePin?: string) => {
+    const inputVal = (overridePin !== undefined ? overridePin : kasPinInput).trim();
+    if (!inputVal) return;
+
+    // Cek apakah cocok dengan akun kas aktif saat ini
+    const currentExpected = cekSaldoData.pin || '123456';
+    if (inputVal === currentExpected) {
+      if (cekSaldoData.nis) {
+        setUnlockedKasNisList(prev => [...prev.filter(n => n !== cekSaldoData.nis), cekSaldoData.nis!]);
+      }
+      setKasPinInput("");
+      setKasPinError(null);
+      playDing();
+      toast.success(`Saldo kas ${cekSaldoData.nama} berhasil dibuka!`);
+      return;
+    }
+
+    // Jika Multi-Kas, cek apakah PIN cocok dengan salah satu sub-kas di kartu ini
+    if (cekSaldoData.multiKasList && cekSaldoData.multiKasList.length > 1) {
+      const matchedIdx = cekSaldoData.multiKasList.findIndex(mk => (mk.pin || '123456') === inputVal);
+      if (matchedIdx !== -1) {
+        const matched = cekSaldoData.multiKasList[matchedIdx];
+        setActiveMultiKasIdx(matchedIdx);
+        setCekSaldoData(prev => ({
+          ...prev,
+          nama: matched.nama,
+          nis: matched.nis,
+          kelas: matched.kelas,
+          saldo: matched.saldo,
+          pin: matched.pin,
+          mutasi: matched.mutasi
+        }));
+        setUnlockedKasNisList(prev => [...prev.filter(n => n !== matched.nis), matched.nis]);
+        setKasPinInput("");
+        setKasPinError(null);
+        playDing();
+        toast.success(`Saldo kas ${matched.nama} berhasil dibuka!`);
+        return;
+      }
+    }
+
+    setKasPinError("PIN Salah! Anda tidak memiliki izin untuk melihat saldo kas ini.");
+    playError();
+  };
+
   const handleCekSaldo = async (id: string) => {
     if (!id) return;
     setCheckingLive(true);
+    setUnlockedKasNisList([]);
+    setKasPinInput("");
+    setKasPinError(null);
     try {
       let currentSantriList = santriMasterData;
       let currentTabunganList = tabunganMasterData;
@@ -174,9 +222,8 @@ export default function CekSaldoPage() {
             mutasi: activeOne.mutasi,
             multiKasList: enrichedMulti
           });
-          setTestPinInput("");
-          setTestPinResult('idle');
-          setShowPinTest(false);
+          setKasPinInput("");
+          setKasPinError(null);
           playDing();
           setCekSaldoInput("");
           return;
@@ -298,9 +345,8 @@ export default function CekSaldoPage() {
           mutasi: recentMutasi,
           multiKasList: undefined
         });
-        setTestPinInput("");
-        setTestPinResult('idle');
-        setShowPinTest(false);
+        setKasPinInput("");
+        setKasPinError(null);
         playDing();
         setCekSaldoInput("");
       } else {
@@ -373,12 +419,13 @@ export default function CekSaldoPage() {
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-700 text-white font-mono text-xs font-bold uppercase tracking-wider mb-2">
                         <Layers className="w-4 h-4" /> KARTU MULTI-KAS ({cekSaldoData.multiKasList.length} DOMPET KAS/EKSKUL)
                       </div>
-                      <p className="text-xs text-indigo-900 dark:text-indigo-200 mb-2 font-mono">
-                        Total Gabungan Saldo di Kartu ini: <strong className="text-emerald-700 dark:text-emerald-400 font-black">Rp {cekSaldoData.multiKasList.reduce((sum, item) => sum + item.saldo, 0).toLocaleString('id-ID')}</strong>
+                      <p className="text-[11px] text-muted-foreground mb-2">
+                        Pilih ekskul di bawah, lalu masukkan PIN akun tersebut untuk melihat saldo:
                       </p>
                       <div className="flex flex-wrap gap-2 justify-center">
                         {cekSaldoData.multiKasList.map((item, idx) => {
                           const isSelected = activeMultiKasIdx === idx;
+                          const isItemUnlocked = unlockedKasNisList.includes(item.nis);
                           return (
                             <button
                               key={item.nis}
@@ -394,8 +441,8 @@ export default function CekSaldoPage() {
                                   pin: item.pin,
                                   mutasi: item.mutasi
                                 }));
-                                setTestPinInput("");
-                                setTestPinResult('idle');
+                                setKasPinInput("");
+                                setKasPinError(null);
                               }}
                               className={`px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
                                 isSelected 
@@ -403,9 +450,13 @@ export default function CekSaldoPage() {
                                   : 'bg-white/80 dark:bg-black/30 hover:bg-white text-indigo-950 dark:text-indigo-200 border border-indigo-200'
                               }`}
                             >
-                              <Building2 className="w-3.5 h-3.5" />
+                              {isItemUnlocked ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 opacity-60" />}
                               <span>{item.nama}</span>
-                              <span className="opacity-80 font-normal text-[10px]">(Rp {item.saldo.toLocaleString('id-ID')})</span>
+                              {isItemUnlocked ? (
+                                <span className="font-mono text-[10px] text-emerald-300 font-bold">(Rp {item.saldo.toLocaleString('id-ID')})</span>
+                              ) : (
+                                <span className="opacity-60 font-normal text-[10px]">(Terkunci)</span>
+                              )}
                             </button>
                           );
                         })}
@@ -423,109 +474,112 @@ export default function CekSaldoPage() {
                     NO. REK: {cekSaldoData.nis} • ASRAMA: {cekSaldoData.kelas || 'Asrama'}
                   </p>
 
-                  <div className="w-full border-t-2 border-indigo-600/30 pt-4">
-                    <span className="font-mono text-xs text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block mb-1 font-bold">
-                      SISA SALDO KAS BERSAMA
-                    </span>
-                    <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
-                      Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
-                    </p>
-                  </div>
-
-                  {/* Info Status Kas Kamar */}
-                  <div className="w-full mt-3 p-2.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/50 flex items-center gap-2 text-left">
-                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <p className="font-mono text-[11px] text-indigo-900 dark:text-indigo-200">
-                      <strong>Kartu Kas Asrama:</strong> Bebas limit belanja berkala. Saldo dapat dipakai penuh di kasir POS dengan otorisasi PIN.
-                    </p>
-                  </div>
-
-                  {/* Riwayat Mutasi Terakhir */}
-                  {cekSaldoData.mutasi && cekSaldoData.mutasi.length > 0 && (
-                    <div className="w-full mt-4 pt-4 border-t-2 border-indigo-600/20 text-left">
-                      <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 mb-2">
-                        <History className="w-3.5 h-3.5" /> 3 Transaksi Terakhir:
-                      </div>
-                      <div className="space-y-1.5 font-mono text-xs">
-                        {cekSaldoData.mutasi.map((m, idx) => {
-                          const isTarik = String(m.jenis).toLowerCase() === 'tarik';
-                          return (
-                            <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-white/80 dark:bg-black/30 border border-indigo-200/60 shadow-xs">
-                              <div className="truncate pr-2">
-                                <div className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
-                                  {m.keterangan || (isTarik ? 'Belanja Kasir POS' : 'Setoran Kas')}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground">
-                                  {m.tanggal} • <span className={isTarik ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'}>{m.jenis}</span>
-                                </div>
-                              </div>
-                              <div className={`font-bold text-xs shrink-0 ${isTarik ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {isTarik ? '-' : '+'} Rp {m.nominal.toLocaleString('id-ID')}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-5 w-full flex flex-col items-center gap-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 text-xs font-medium">
-                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>Dilindungi PIN 6 Digit untuk kasir POS</span>
-                    </div>
-
-                    {!showPinTest ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setShowPinTest(true)}
-                        className="text-xs font-bold font-mono text-indigo-700 border-indigo-300 hover:bg-indigo-50 mt-1"
-                      >
-                        <Key className="w-3.5 h-3.5 mr-1" /> TES PIN KARTU
-                      </Button>
-                    ) : (
-                      <div className="mt-2 p-3 bg-card border-2 border-indigo-200 rounded-xl w-full max-w-xs space-y-2 animate-in fade-in">
-                        <span className="text-[11px] font-bold text-muted-foreground uppercase">Verifikasi PIN Kamar:</span>
-                        <div className="flex gap-2">
-                          <Input 
-                            type="password"
-                            maxLength={6}
-                            placeholder="6 Digit PIN..."
-                            value={testPinInput}
-                            onChange={(e) => setTestPinInput(e.target.value)}
-                            className="font-mono text-center tracking-widest text-sm h-9"
-                          />
-                          <Button 
-                            size="sm" 
-                            onClick={() => {
-                              const expected = cekSaldoData.pin || '123456';
-                              if (testPinInput === expected) {
-                                setTestPinResult('correct');
-                                playDing();
-                              } else {
-                                setTestPinResult('wrong');
-                                playError();
-                              }
-                            }}
-                            className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
-                          >
-                            CEK
-                          </Button>
+                  {(() => {
+                    const isCurrentKasUnlocked = cekSaldoData.nis ? unlockedKasNisList.includes(cekSaldoData.nis) : false;
+                    if (!isCurrentKasUnlocked) {
+                      return (
+                        <div className="w-full max-w-sm my-4 p-5 bg-card/90 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl shadow-sm text-center">
+                          <div className="w-12 h-12 mx-auto rounded-full bg-indigo-100 dark:bg-indigo-950/80 flex items-center justify-center text-indigo-600 mb-2 shadow-xs">
+                            <Lock className="w-6 h-6" />
+                          </div>
+                          <h4 className="font-bold text-foreground text-sm mb-1">
+                            Saldo Kas Terproteksi PIN
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground mb-3">
+                            Masukkan PIN 6 Digit untuk melihat saldo kas <strong>{cekSaldoData.nama}</strong>:
+                          </p>
+                          <form onSubmit={(e) => { e.preventDefault(); handleUnlockKas(); }} className="space-y-3">
+                            <Input
+                              type="password"
+                              inputMode="numeric"
+                              maxLength={6}
+                              autoFocus
+                              placeholder="••••••"
+                              value={kasPinInput}
+                              onChange={(e) => {
+                                setKasPinInput(e.target.value.replace(/\D/g, ''));
+                                setKasPinError(null);
+                              }}
+                              className="font-mono text-center tracking-[0.4em] text-lg h-11 bg-background border-indigo-200 dark:border-indigo-800 font-bold"
+                            />
+                            {kasPinError && (
+                              <p className="text-xs font-semibold text-rose-600 flex items-center justify-center gap-1.5 animate-in fade-in">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {kasPinError}
+                              </p>
+                            )}
+                            <Button
+                              type="submit"
+                              disabled={kasPinInput.length < 4}
+                              className="w-full h-10 font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
+                            >
+                              <Key className="w-4 h-4 mr-1.5" /> Buka Saldo Kas
+                            </Button>
+                          </form>
                         </div>
-                        {testPinResult === 'correct' && (
-                          <p className="text-xs font-bold text-green-600 flex items-center justify-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> PIN Benar! Kartu siap belanja di POS.
+                      );
+                    }
+
+                    return (
+                      <div className="w-full animate-in fade-in duration-200">
+                        <div className="w-full border-t-2 border-indigo-600/30 pt-4">
+                          <div className="flex items-center justify-center gap-2 mb-1">
+                            <span className="font-mono text-xs text-indigo-700 dark:text-indigo-400 uppercase tracking-widest font-bold">
+                              SISA SALDO KAS
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Terverifikasi PIN
+                            </span>
+                          </div>
+                          <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
+                            Rp {(cekSaldoData.saldo || 0).toLocaleString('id-ID')}
                           </p>
+                        </div>
+
+                        {/* Riwayat Mutasi Terakhir */}
+                        {cekSaldoData.mutasi && cekSaldoData.mutasi.length > 0 && (
+                          <div className="w-full mt-4 pt-4 border-t-2 border-indigo-600/20 text-left">
+                            <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 mb-2">
+                              <History className="w-3.5 h-3.5" /> 3 Transaksi Terakhir:
+                            </div>
+                            <div className="space-y-1.5 font-mono text-xs">
+                              {cekSaldoData.mutasi.map((m, idx) => {
+                                const isTarik = String(m.jenis).toLowerCase() === 'tarik';
+                                return (
+                                  <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-white/80 dark:bg-black/30 border border-indigo-200/60 shadow-xs">
+                                    <div className="truncate pr-2">
+                                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                                        {m.keterangan || (isTarik ? 'Belanja Kasir POS' : 'Setoran Kas')}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground">
+                                        {m.tanggal} • <span className={isTarik ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'}>{m.jenis}</span>
+                                      </div>
+                                    </div>
+                                    <div className={`font-bold text-xs shrink-0 ${isTarik ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                      {isTarik ? '-' : '+'} Rp {m.nominal.toLocaleString('id-ID')}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
-                        {testPinResult === 'wrong' && (
-                          <p className="text-xs font-bold text-red-600 flex items-center justify-center gap-1">
-                            <X className="w-3.5 h-3.5" /> PIN Salah! Periksa atau hubungi Admin.
-                          </p>
-                        )}
+
+                        <div className="mt-4 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUnlockedKasNisList(prev => prev.filter(n => n !== cekSaldoData.nis));
+                              setKasPinInput("");
+                              setKasPinError(null);
+                            }}
+                            className="px-3 py-1 rounded-lg text-xs font-mono font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-800 transition-all flex items-center gap-1.5"
+                          >
+                            <Lock className="w-3 h-3" /> Kunci Kembali
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="bg-green-600/10 border-4 border-green-600 p-6 md:p-8 flex flex-col items-center text-center animate-in zoom-in duration-300 w-full h-full justify-center rounded-2xl">
