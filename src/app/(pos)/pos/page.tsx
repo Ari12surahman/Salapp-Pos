@@ -22,7 +22,7 @@ import { getPeriodStartDateWIB, getWIBDateStr } from "@/lib/api/supabaseServices
 
 export const getBankLogo = (method: string) => {
   const m = (method || '').toLowerCase();
-  if (m.includes('bca')) return '/banks/bca.svg';
+  if (m.includes('bca')) return '/banks/bca.png';
   if (m.includes('mandiri')) return '/banks/mandiri.svg';
   if (m.includes('bri')) return '/banks/bri.svg';
   if (m.includes('bni')) return '/banks/bni.svg';
@@ -32,24 +32,33 @@ export const getBankLogo = (method: string) => {
   if (m.includes('danamon')) return '/banks/danamon.svg';
   if (m.includes('maybank')) return '/banks/maybank.svg';
   if (m.includes('ocbc')) return '/banks/ocbc.svg';
+  if (m.includes('muamalat')) return '/banks/muamalat.svg';
+  if (m.includes('neo') || m.includes('bnc')) return '/banks/neo.png';
+  if (m.includes('alfamart')) return '/banks/alfamart.png';
+  if (m.includes('indomaret')) return '/banks/indomaret.png';
   if (m.includes('qris')) return '/banks/qris.svg';
-  return null;
+  return '/banks/bri.svg';
 };
 
 export const getBankDisplayName = (method: string) => {
   const map: Record<string, string> = {
     qris: 'QRIS Dinamis',
-    bca_va: 'BCA Virtual Account',
-    mandiri_va: 'Mandiri Virtual Account',
-    bri_va: 'BRI Virtual Account',
-    bni_va: 'BNI Virtual Account',
-    bsi_va: 'BSI Virtual Account',
-    cimb_niaga_va: 'CIMB Niaga VA',
-    cimb_va: 'CIMB Niaga VA',
-    danamon_va: 'Danamon VA',
-    permata_va: 'Bank Permata VA',
-    maybank_va: 'Maybank VA',
-    ocbc_va: 'OCBC VA',
+    bca_va: 'Bank BCA',
+    mandiri_va: 'Bank Mandiri',
+    bri_va: 'Bank BRI',
+    bni_va: 'Bank BNI',
+    bsi_va: 'Bank Syariah Indonesia (BSI)',
+    cimb_niaga_va: 'Bank CIMB Niaga',
+    cimb_va: 'Bank CIMB Niaga',
+    danamon_va: 'Bank Danamon',
+    permata_va: 'Bank Permata',
+    maybank_va: 'Bank Maybank',
+    ocbc_va: 'Bank OCBC',
+    muamalat_va: 'Bank Muamalat',
+    bank_neo_va: 'Bank Neo Commerce (BNC)',
+    neo_va: 'Bank Neo Commerce (BNC)',
+    alfamart: 'Alfamart',
+    indomaret: 'Indomaret',
     payment_link: 'Payment Link'
   };
   return map[method] || String(method || '').replace('_va', ' VA').toUpperCase();
@@ -1012,7 +1021,14 @@ export default function PosPage() {
     try {
       const orderId = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const cartTotal = getCartTotal();
-      const adminFee = type === 'qris' ? 0 : 3000;
+      let adminFee = 3500;
+      if (type === 'qris') {
+        adminFee = Math.ceil(cartTotal * 0.007) + 300;
+      } else if (type.includes('bca')) {
+        adminFee = 4700;
+      } else if (type.includes('alfamart') || type.includes('indomaret')) {
+        adminFee = 3000;
+      }
       const amount = cartTotal + adminFee;
 
       if (type !== 'qris' && amount < 10000) {
@@ -1651,7 +1667,7 @@ export default function PosPage() {
                   </div>
                   
                   {[
-                    { id: 'bca_va', name: 'Bank BCA', logo: '/banks/bca.svg' },
+                    { id: 'bca_va', name: 'Bank BCA', logo: '/banks/bca.png' },
                     { id: 'mandiri_va', name: 'Bank Mandiri', logo: '/banks/mandiri.svg' },
                     { id: 'bri_va', name: 'Bank BRI', logo: '/banks/bri.svg' },
                     { id: 'bni_va', name: 'Bank BNI', logo: '/banks/bni.svg' },
@@ -1661,6 +1677,8 @@ export default function PosPage() {
                     { id: 'danamon_va', name: 'Bank Danamon', logo: '/banks/danamon.svg' },
                     { id: 'maybank_va', name: 'Bank Maybank', logo: '/banks/maybank.svg' },
                     { id: 'ocbc_va', name: 'Bank OCBC', logo: '/banks/ocbc.svg' },
+                    { id: 'muamalat_va', name: 'Bank Muamalat', logo: '/banks/muamalat.svg' },
+                    { id: 'bank_neo_va', name: 'Bank Neo Commerce (BNC)', logo: '/banks/neo.png' },
                   ].map((bank) => (
                     <button 
                       key={bank.id}
@@ -1938,7 +1956,9 @@ export default function PosPage() {
                       </div>
                       <div className="flex">
                         <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Biaya Admin</div>
-                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs">Rp 3.000</div>
+                        <div className="w-2/3 p-3 text-slate-800 font-semibold text-xs">
+                          Rp {(paymentMethod.includes('bca') ? 4700 : (paymentMethod.includes('alfamart') || paymentMethod.includes('indomaret')) ? 3000 : 3500).toLocaleString("id-ID")}
+                        </div>
                       </div>
                       <div className="flex">
                         <div className="w-1/3 p-3 bg-slate-50/70 border-r border-slate-200 text-slate-500 font-medium text-xs">Biaya Aplikasi</div>
@@ -1946,7 +1966,9 @@ export default function PosPage() {
                       </div>
                       <div className="flex bg-slate-50/40">
                         <div className="w-1/3 p-3 bg-slate-50 border-r border-slate-200 text-slate-900 font-bold text-sm">Total Bayar</div>
-                        <div className="w-2/3 p-3 text-blue-700 font-bold text-base">Rp {(getCartTotal() + 3000).toLocaleString("id-ID")}</div>
+                        <div className="w-2/3 p-3 text-blue-700 font-bold text-base">
+                          Rp {(getCartTotal() + (paymentMethod.includes('bca') ? 4700 : (paymentMethod.includes('alfamart') || paymentMethod.includes('indomaret')) ? 3000 : 3500)).toLocaleString("id-ID")}
+                        </div>
                       </div>
                     </div>
                   </div>

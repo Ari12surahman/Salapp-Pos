@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       else if (rawMethod.includes('DANAMON')) codePayment = 'DANAMONVA';
       else if (rawMethod.includes('MUAMALAT')) codePayment = 'MUAMALATVA';
       else if (rawMethod.includes('MAYBANK')) codePayment = 'MAYBANKVA';
-      else if (rawMethod.includes('NEO')) codePayment = 'BANKNEOVA';
+      else if (rawMethod.includes('OCBC')) codePayment = 'OCBCVA';
+      else if (rawMethod.includes('NEO') || rawMethod.includes('BNC')) codePayment = 'BANKNEOVA';
       else if (rawMethod.includes('ALFAMART')) codePayment = 'ALFAMART';
       else if (rawMethod.includes('INDOMARET')) codePayment = 'INDOMARET';
       else if (rawMethod.includes('QRIS') || rawMethod.includes('QR')) codePayment = 'QRIS';
