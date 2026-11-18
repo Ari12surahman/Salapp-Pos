@@ -110,17 +110,20 @@ export async function POST(request: Request) {
 
       const d = resData.data || {};
       const isQRIS = codePayment === 'QRIS';
-      const vaNum = d.nomor_va || '';
+      const vaNum = d.nomor_va || d.pay_code || '';
       const qrStr = d.qr_string || '';
       const qrImg = d.qr_image || '';
+      const paymentCode = isQRIS ? qrStr : vaNum;
 
       const paymentObj = {
         va_number: vaNum,
-        payment_number: vaNum,
+        payment_number: paymentCode,
+        code: paymentCode,
         qr_string: qrStr,
         qr_image: qrImg,
         checkout_url: d.checkout_url || '',
         amount: d.total_bayar || amount,
+        total_amount: d.total_bayar || amount,
         total_fee: d.total_fee || 0,
         total_diterima: d.total_diterima || amount,
         trx_reference: d.trx_reference || '',
@@ -141,8 +144,8 @@ export async function POST(request: Request) {
     }
 
     // --- 2. ACTION: CHECK STATUS (CEK STATUS PEMBAYARAN) ---
-    if (action === 'checkStatus' || action === 'checkDokuStatus' || action === 'checkWijayapayStatus') {
-      const orderId = payload.orderId || payload.ref_id || payload.invoice_number;
+    if (action === 'checkStatus' || action === 'checkDokuStatus' || action === 'checkWijayapayStatus' || action === 'pollPakasirStatus' || action === 'pollStatus') {
+      const orderId = payload.orderId || payload.ref_id || payload.txnId || payload.txId || payload.invoice_number;
       if (!orderId) {
         return NextResponse.json({ success: false, message: 'orderId / ref_id required' }, { status: 400, headers: corsHeaders });
       }
@@ -150,7 +153,7 @@ export async function POST(request: Request) {
       // Cek dulu di database lokal jika sudah lunas
       try {
         const { data: dbOrder } = await supabase.from('PakasirOrders').select('*').eq('order_id', orderId).maybeSingle();
-        if (dbOrder && (dbOrder.status === 'SUCCESS' || dbOrder.status === 'PAID')) {
+        if (dbOrder && (dbOrder.status === 'SUCCESS' || dbOrder.status === 'PAID' || dbOrder.status === 'COMPLETED')) {
           return NextResponse.json({
             status: 'SUCCESS',
             isPaid: true,
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
       });
 
       const resData = await res.json();
-      const statusStr = String(resData?.status_pembayaran || '').toLowerCase();
+      const statusStr = String(resData?.status_pembayaran || resData?.status || '').toLowerCase();
       const isPaid = statusStr === 'paid' || statusStr === 'success' || statusStr === 'settlement';
 
       if (isPaid) {
@@ -187,7 +190,7 @@ export async function POST(request: Request) {
 
     // --- 3. ACTION: GET ACTIVE PAYMENT CHANNELS ---
     if (action === 'getPaymentChannels') {
-      const res = await fetch(`https://wijayapay.com/api/get-payment?code_merchant=${encodeURIComponent(codeMerchant)}&api_key=${encodeURIComponent(apiKey)}`, {
+      const res = await fetch(`${WIJAYAPAY_API_URL}/get-payment?code_merchant=${encodeURIComponent(codeMerchant)}&api_key=${encodeURIComponent(apiKey)}`, {
         headers: { 'User-Agent': 'SalApp-Integration/1.0' }
       });
       const data = await res.json();
