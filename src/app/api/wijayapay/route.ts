@@ -26,8 +26,15 @@ export async function POST(request: Request) {
     const action = body.action || 'requestPayment';
     const payload = typeof body.data === 'string' ? JSON.parse(body.data) : (body.data || body);
 
-    const codeMerchant = payload.codeMerchant || DEFAULT_CODE_MERCHANT;
-    const apiKey = payload.apiKey || DEFAULT_API_KEY;
+    // Pastikan credential WijayaPay valid. Abaikan apiKey lama (seperti dari Pakasir / sandbox)
+    const codeMerchant = (payload.codeMerchant && String(payload.codeMerchant).startsWith('WP'))
+      ? payload.codeMerchant
+      : DEFAULT_CODE_MERCHANT;
+
+    const rawApiKey = String(payload.apiKey || '');
+    const apiKey = (rawApiKey.length === 26 && !rawApiKey.includes('xxx') && !rawApiKey.includes('sandbox'))
+      ? rawApiKey
+      : DEFAULT_API_KEY;
 
     // --- 1. ACTION: REQUEST PAYMENT (CREATE QRIS / VA) ---
     if (action === 'requestPayment' || action === 'requestDokuPayment' || action === 'requestWijayapayPayment') {
@@ -56,10 +63,31 @@ export async function POST(request: Request) {
 
       const signature = crypto.createHash('md5').update(codeMerchant + apiKey + orderId).digest('hex');
 
-      // Callback URL default
-      const origin = request.headers.get('origin') || request.headers.get('host') || 'https://salapp.com';
-      const cleanOrigin = origin.startsWith('http') ? origin : `https://${origin}`;
-      const callbackUrl = payload.callbackUrl || `${cleanOrigin}/api/wijayapay/webhook`;
+      // Callback URL - selalu ke salapp-bendahara.web.id (server utama yang handle webhook)
+      const callbackUrl = payload.callbackUrl || 'https://salapp-bendahara.web.id/api/wijayapay/webhook';
+
+      // Hitung nominalToSend agar pesantren selalu terima NETT 100% dari amount
+      let nominalToSend = amount;
+
+      if (codePayment === 'QRIS') {
+        // WijayaPay QRIS fee: 0.7% + Rp 300 (dihitung dari Gross saat settlement)
+        // Agar nett diterima merchant persis sama dengan amount, sesuaikan nominal
+        for (let s = amount; s <= amount + 50; s++) {
+          const wpGross = s + Math.ceil(s * 0.007 + 300);
+          const wpFee = Math.ceil(wpGross * 0.007 + 300);
+          const wpNett = wpGross - wpFee;
+          if (wpNett >= amount) {
+            nominalToSend = s;
+            break;
+          }
+        }
+      } else if (codePayment === 'CIMBVA') {
+        // CIMBVA fee di-charge ke merchant (type_fee: 'merchant'), tambah Rp 3.500 agar nett 100%
+        nominalToSend = amount + 3500;
+      } else {
+        // Semua VA & Retail lainnya bertipe 'customer', WijayaPay otomatis tambahkan fee di atas nominalToSend
+        nominalToSend = amount;
+      }
 
       const createPayload = {
         code_merchant: codeMerchant,
@@ -67,7 +95,7 @@ export async function POST(request: Request) {
         code_payment: codePayment,
         ref_id: orderId,
         customer_name: customerName,
-        nominal: amount,
+        nominal: nominalToSend,
         callback_url: callbackUrl
       };
 

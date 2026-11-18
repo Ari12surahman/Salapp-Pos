@@ -1023,13 +1023,14 @@ export default function PosPage() {
       const cartTotal = getCartTotal();
       let adminFee = 3500;
       if (type === 'qris') {
-        adminFee = Math.ceil(cartTotal * 0.007) + 300;
+        adminFee = Math.ceil((cartTotal + 300) / 0.993) - cartTotal;
       } else if (type.includes('bca')) {
         adminFee = 4700;
       } else if (type.includes('alfamart') || type.includes('indomaret')) {
         adminFee = 3000;
       }
-      const amount = cartTotal + adminFee;
+      // amount yang dikirim ke backend adalah cartTotal (net yang harus diterima warung)
+      const amount = cartTotal;
 
       if (type !== 'qris' && amount < 10000) {
         toast.error("Pembayaran Virtual Account minimal Rp 10.000. Untuk total di bawah Rp 10.000 silakan pilih QRIS.");
@@ -1679,6 +1680,8 @@ export default function PosPage() {
                     { id: 'ocbc_va', name: 'Bank OCBC', logo: '/banks/ocbc.svg' },
                     { id: 'muamalat_va', name: 'Bank Muamalat', logo: '/banks/muamalat.svg' },
                     { id: 'bank_neo_va', name: 'Bank Neo Commerce (BNC)', logo: '/banks/neo.png' },
+                    { id: 'alfamart', name: 'Alfamart', logo: '/banks/alfamart.png' },
+                    { id: 'indomaret', name: 'Indomaret', logo: '/banks/indomaret.png' },
                   ].map((bank) => (
                     <button 
                       key={bank.id}
@@ -1876,6 +1879,13 @@ export default function PosPage() {
                         ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
                       </p>
                       
+                      {/* Rincian Total Bayar QRIS */}
+                      <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 text-left text-xs divide-y divide-slate-100">
+                        <div className="flex justify-between py-1"><span className="text-slate-500">Nominal Belanja</span><span className="font-semibold text-slate-800">Rp {getCartTotal().toLocaleString("id-ID")}</span></div>
+                        <div className="flex justify-between py-1"><span className="text-slate-500">Biaya QRIS (0.7% + 300)</span><span className="font-semibold text-slate-800">Rp {(Math.ceil((getCartTotal() + 300) / 0.993) - getCartTotal()).toLocaleString("id-ID")}</span></div>
+                        <div className="flex justify-between py-1 pt-1.5"><span className="font-bold text-slate-900">Total Bayar</span><span className="font-bold text-blue-700 text-sm">Rp {Math.ceil((getCartTotal() + 300) / 0.993).toLocaleString("id-ID")}</span></div>
+                      </div>
+
                       {pakasirData.qrString ? (
                         <div className="flex flex-col items-center">
                           <div className="p-4 bg-white rounded-lg border-4 border-border relative mb-4">
