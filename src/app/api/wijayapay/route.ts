@@ -116,24 +116,45 @@ export async function POST(request: Request) {
         console.warn('Gagal mencatat order ke Supabase:', dbErr);
       }
 
-      // Request ke WijayaPay Gateway
-      const res = await fetch(`${WIJAYAPAY_API_URL}/transaction/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Signature': signature,
-          'User-Agent': 'SalApp-Integration/1.0'
-        },
-        body: JSON.stringify(createPayload)
-      });
+      // Request ke WijayaPay Gateway dengan timeout 12 detik agar aplikasi tidak hang
+      let res;
+      let resData: any = {};
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      const resData = await res.json();
+        res = await fetch(`${WIJAYAPAY_API_URL}/transaction/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Signature': signature,
+            'User-Agent': 'SalApp-Integration/1.0'
+          },
+          body: JSON.stringify(createPayload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        resData = await res.json();
+      } catch (fetchErr: any) {
+        if (fetchErr.name === 'AbortError' || String(fetchErr).includes('abort')) {
+          return NextResponse.json({
+            status: 'error',
+            success: false,
+            message: `Koneksi ke server ${codePayment} melebihi batas waktu (timeout). Server ${codePayment} sedang sibuk, silakan gunakan metode Virtual Account (BCA, Mandiri, BRI, BSI, dll) yang aktif normal.`
+          }, { status: 400, headers: corsHeaders });
+        }
+        throw fetchErr;
+      }
 
       if (!res.ok || resData.success === false) {
+        let errMsg = resData.message || 'Gagal membuat transaksi di WijayaPay';
+        if (errMsg.includes('Hubungi admin') || errMsg.includes('Gagal membuat pembayaran')) {
+          errMsg = `Layanan ${codePayment} sedang mengalami antrean jaringan / pemeliharaan di server pusat. Silakan gunakan metode Virtual Account (BCA, Mandiri, BRI, BSI, dll) yang aktif normal.`;
+        }
         return NextResponse.json({
           status: 'error',
           success: false,
-          message: resData.message || 'Gagal membuat transaksi di WijayaPay'
+          message: errMsg
         }, { status: 400, headers: corsHeaders });
       }
 
