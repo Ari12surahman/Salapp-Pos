@@ -1936,22 +1936,38 @@ export default function PosPage() {
                         ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
                       </p>
 
-                      {pakasirData.qrString && (
-                        <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center">
-                          <div className="w-20 h-12 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center mb-2 shadow-xs">
-                            <img src={getBankLogo(paymentMethod) || getBankLogo('bri_va')} alt="Bank" className="w-full h-full object-contain" />
+                      {pakasirData.qrString && (() => {
+                        const isRetail = (paymentMethod || '').includes('alfa') || (paymentMethod || '').includes('indo');
+                        const retailName = (paymentMethod || '').includes('alfa') ? 'Alfamart' : 'Indomaret';
+                        return (
+                          <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center">
+                            <div className="w-20 h-12 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center mb-2 shadow-xs">
+                              <img src={getBankLogo(paymentMethod) || getBankLogo('bri_va')} alt="Logo" className="w-full h-full object-contain" />
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{isRetail ? `KODE PEMBAYARAN ${retailName.toUpperCase()}` : getBankDisplayName(paymentMethod)}</p>
+                            <div className="text-3xl font-mono font-bold text-slate-900 tracking-wider break-all mb-3">{pakasirData.qrString}</div>
+                            
+                            <Button variant="secondary" className="px-6 rounded-full font-bold text-xs mb-3" onClick={() => {
+                                navigator.clipboard.writeText(pakasirData.qrString || '');
+                                toast.success(isRetail ? "Kode pembayaran disalin" : "Nomor VA disalin");
+                            }}>
+                              <Copy className="w-4 h-4 mr-2" /> {isRetail ? 'Salin Kode Pembayaran' : 'Salin VA'}
+                            </Button>
+
+                            {isRetail && (
+                              <div className="w-full text-left bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed mt-1">
+                                <p className="font-bold mb-1">🏪 Petunjuk Pembayaran Kasir ${retailName}:</p>
+                                <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-amber-800">
+                                  <li>Kunjungi gerai <b>${retailName}</b> terdekat.</li>
+                                  <li>Beri tahu kasir mau bayar <b>Tagihan WijayaPay</b>.</li>
+                                  <li>Tunjukkan <b>Kode Pembayaran</b> di atas ke kasir.</li>
+                                  <li>Bayar sesuai total dan simpan struknya.</li>
+                                </ol>
+                              </div>
+                            )}
                           </div>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{getBankDisplayName(paymentMethod)}</p>
-                          <div className="text-3xl font-mono font-bold text-slate-900 tracking-wider break-all mb-4">{pakasirData.qrString}</div>
-                          
-                          <Button variant="secondary" className="px-6 rounded-full font-bold text-xs" onClick={() => {
-                              navigator.clipboard.writeText(pakasirData.qrString || '');
-                              toast.success("Nomor VA disalin");
-                          }}>
-                            <Copy className="w-4 h-4 mr-2" /> Salin VA
-                          </Button>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       <div className="w-full p-4 bg-blue-50/60 rounded-2xl flex justify-between items-center border border-blue-100">
                         <div className="text-left">
