@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from 'sonner';
-import { Plus, Store, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Store, Edit, Trash2, Loader2, Eye, EyeOff, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirmStore } from "@/store/confirmStore";
@@ -18,6 +18,7 @@ export default function WarungPage() {
   const [editId, setEditId] = useState<string | null>(null);
 
   const [feeConfig, setFeeConfig] = useState<any>(null);
+  const [portalConfig, setPortalConfig] = useState<{ hiddenWarungs?: string[] }>({ hiddenWarungs: [] });
 
   const fetchFeeConfig = async () => {
     try {
@@ -28,16 +29,26 @@ export default function WarungPage() {
     } catch (e) {}
   };
 
+  const fetchPortalConfig = async () => {
+    try {
+      const { data } = await supabase.from('MasterConfig').select('*').eq('kunci', 'portalWarungConfig').maybeSingle();
+      if (data?.nilai) {
+        setPortalConfig(typeof data.nilai === 'string' ? JSON.parse(data.nilai) : data.nilai);
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
     fetchFeeConfig();
+    fetchPortalConfig();
   }, []);
 
   const [formData, setFormData] = useState({
-    nama: "", lokasi: "", pj: "", biayaKader: ""
+    nama: "", lokasi: "", pj: "", biayaKader: "", tampilDiPortal: true
   });
 
   const resetForm = () => {
-    setFormData({ nama: "", lokasi: "", pj: "", biayaKader: "" });
+    setFormData({ nama: "", lokasi: "", pj: "", biayaKader: "", tampilDiPortal: true });
     setIsEdit(false);
     setEditId(null);
   };
@@ -54,13 +65,43 @@ export default function WarungPage() {
 
   const handleEditClick = (item: any) => {
     const customKader = feeConfig?.warungConfig?.[item.id]?.biayaKader;
+    const isHidden = (portalConfig?.hiddenWarungs || []).includes(item.id);
     setFormData({
       nama: item.nama, lokasi: item.lokasi, pj: item.pj,
-      biayaKader: customKader !== undefined ? String(customKader) : ""
+      biayaKader: customKader !== undefined ? String(customKader) : "",
+      tampilDiPortal: !isHidden
     });
     setEditId(item.id);
     setIsEdit(true);
     setIsModalOpen(true);
+  };
+
+  const handleTogglePortalVisibility = async (warungId: string, currentVisible: boolean) => {
+    try {
+      const currentHidden = portalConfig?.hiddenWarungs || [];
+      let updatedHidden: string[];
+      if (currentVisible) {
+        updatedHidden = Array.from(new Set([...currentHidden, warungId]));
+      } else {
+        updatedHidden = currentHidden.filter(id => id !== warungId);
+      }
+      const newConfig = { ...portalConfig, hiddenWarungs: updatedHidden };
+      setPortalConfig(newConfig);
+
+      await supabase.from('MasterConfig').upsert({
+        kunci: 'portalWarungConfig',
+        nilai: JSON.stringify(newConfig)
+      }, { onConflict: 'kunci' });
+
+      await supabase.from('Pengaturan').upsert({
+        Kunci: 'PORTAL_WARUNG_CONFIG',
+        Nilai: JSON.stringify(newConfig)
+      }, { onConflict: 'Kunci' });
+
+      toast.success(!currentVisible ? "Warung kini ditampilkan di Portal Wali" : "Warung disembunyikan dari Portal Wali");
+    } catch (err: any) {
+      toast.error("Gagal mengubah visibilitas: " + err.message);
+    }
   };
 
   const handleDeleteClick = async (id: string) => {
@@ -92,11 +133,12 @@ export default function WarungPage() {
       const res = await api.post(endpoint, payload);
       if (res && res.status === "error") throw new Error(res.message);
       
+      const targetId = isEdit ? editId : (res?.data?.id || res?.data?.ID || res?.id || res?.ID);
+
       // Simpan biaya kader warung ke MasterConfig
       try {
         const currentConfig = feeConfig ? JSON.parse(JSON.stringify(feeConfig)) : { biayaAplikasi: 30000, biayaKader: 200000, maxPotongPersen: 50 };
         const wc = { ...(currentConfig.warungConfig || {}) };
-        const targetId = isEdit ? editId : (res?.data?.id || res?.data?.ID || res?.id || res?.ID);
         if (targetId) {
           if (formData.biayaKader !== "" && !isNaN(Number(formData.biayaKader))) {
             wc[targetId] = { ...(wc[targetId] || {}), biayaKader: Number(formData.biayaKader) };
@@ -115,6 +157,31 @@ export default function WarungPage() {
         }
       } catch (err) {
         console.error("Gagal simpan feeConfig warung:", err);
+      }
+
+      // Simpan visibilitas warung di Portal Wali
+      try {
+        if (targetId) {
+          const currentHidden = portalConfig?.hiddenWarungs || [];
+          let updatedHidden: string[];
+          if (!formData.tampilDiPortal) {
+            updatedHidden = Array.from(new Set([...currentHidden, targetId]));
+          } else {
+            updatedHidden = currentHidden.filter(id => id !== targetId);
+          }
+          const newConfig = { ...portalConfig, hiddenWarungs: updatedHidden };
+          setPortalConfig(newConfig);
+          await supabase.from('MasterConfig').upsert({
+            kunci: 'portalWarungConfig',
+            nilai: JSON.stringify(newConfig)
+          }, { onConflict: 'kunci' });
+          await supabase.from('Pengaturan').upsert({
+            Kunci: 'PORTAL_WARUNG_CONFIG',
+            Nilai: JSON.stringify(newConfig)
+          }, { onConflict: 'Kunci' });
+        }
+      } catch (err) {
+        console.error("Gagal simpan visibilitas portal:", err);
       }
 
       toast.success(isEdit ? "Warung Berhasil Diubah!" : "Warung Berhasil Ditambahkan!");
@@ -226,6 +293,47 @@ export default function WarungPage() {
               })()}
             </div>
 
+            {/* PORTAL WALI VISIBILITY TOGGLE */}
+            {(() => {
+              const isVisibleInPortal = !(portalConfig?.hiddenWarungs || []).includes(id);
+              return (
+                <div className="flex items-center justify-between p-3 bg-muted/40 border-2 border-border mt-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-1.5 rounded-sm ${isVisibleInPortal ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-mono text-xs font-bold uppercase">Portal Wali Santri</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {isVisibleInPortal ? "Muncul di Menu Titip Jajan" : "Disembunyikan dari Portal"}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isVisibleInPortal ? "outline" : "secondary"}
+                    onClick={() => handleTogglePortalVisibility(id, isVisibleInPortal)}
+                    className={`font-mono text-xs font-bold gap-1.5 border-2 transition-all ${
+                      isVisibleInPortal 
+                        ? "border-green-600 text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:text-green-300" 
+                        : "border-border text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {isVisibleInPortal ? (
+                      <>
+                        <Eye className="w-3.5 h-3.5 text-green-600 dark:text-green-400" /> MUNCUL
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5 text-muted-foreground" /> SEMBUNYI
+                      </>
+                    )}
+                  </Button>
+                </div>
+              );
+            })()}
+
             <div className="flex items-center justify-end gap-2 mt-2 pt-4 border-t border-border">
               <Button onClick={() => handleEditClick({ id, nama, lokasi, pj, status })} variant="outline" size="sm" className="gap-2"><Edit className="w-3 h-3" /> EDIT</Button>
               <Button onClick={() => handleDeleteClick(id)} variant="destructive" size="sm" className="gap-2"><Trash2 className="w-3 h-3" /> HAPUS</Button>
@@ -272,6 +380,22 @@ export default function WarungPage() {
                   placeholder={`Standar: Rp ${(feeConfig?.biayaKader ?? 200000).toLocaleString('id-ID')}`} 
                 />
                 <span className="text-[10px] text-muted-foreground">Kosongkan jika ingin mengikuti tarif standar umum (Rp {(feeConfig?.biayaKader ?? 200000).toLocaleString('id-ID')}).</span>
+              </div>
+              <div className="flex items-center justify-between border-2 border-border p-3 bg-muted/20 mt-1">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-primary" /> TAMPILKAN DI PORTAL WALI
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Jika aktif, warung dan produknya dapat dilihat wali santri di menu Titip Jajan Portal.
+                  </span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={formData.tampilDiPortal} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, tampilDiPortal: e.target.checked }))} 
+                  className="w-5 h-5 accent-primary cursor-pointer rounded" 
+                />
               </div>
               <div className="flex justify-end gap-2 mt-6">
                 <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); resetForm(); }}>BATAL</Button>
