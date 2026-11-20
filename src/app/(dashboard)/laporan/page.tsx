@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from 'sonner';
+import { useQueryClient } from "@tanstack/react-query";
 import { Download, FileText, Loader2, Trash2, Receipt, Printer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/axios";
@@ -14,6 +15,7 @@ import { saveAs } from "file-saver";
 
 export default function LaporanPage() {
   const user = useAuthStore(state => state.user);
+  const queryClient = useQueryClient();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -255,6 +257,10 @@ export default function LaporanPage() {
       if (res.status === "error" || (res.data && res.data.status === "error")) {
         throw new Error((res.data && res.data.message) || res.message || "Gagal menghapus");
       }
+      queryClient.invalidateQueries({ queryKey: ['pencairanEligible'] });
+      queryClient.invalidateQueries({ queryKey: ['riwayatPencairan'] });
+      toast.success("Transaksi berhasil dihapus!");
+      setSelectedIds([]);
       fetchTransaksi();
     } catch (err: any) {
       toast.error("Gagal menghapus: " + (err.message || "Kesalahan server"));

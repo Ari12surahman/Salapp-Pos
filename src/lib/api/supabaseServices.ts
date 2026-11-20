@@ -432,6 +432,7 @@ export const supabaseServices = {
 
   hapusTransaksi: async (payload: any) => {
     if (!payload.trxIds || !payload.trxIds.length) return { status: 'success' };
+    await supabase.from('DetailTransaksi').delete().in('TrxID', payload.trxIds);
     const { error } = await supabase.from('Transaksi').delete().in('TrxID', payload.trxIds);
     if (error) return { status: 'error', message: error.message };
     return { status: 'success' };

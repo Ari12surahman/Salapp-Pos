@@ -41,7 +41,8 @@ export default function PencairanPage() {
     queryKey: ['pencairanEligible', activeWarungId],
     queryFn: () => api.post('getPencairanEligible', { warungId: activeWarungId || "ALL" }).then(res => res?.data ?? []),
     enabled: !!activeWarungId,
-    staleTime: 1000 * 30, // 30s cache
+    staleTime: 0,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 
@@ -50,7 +51,8 @@ export default function PencairanPage() {
     queryKey: ['riwayatPencairan', activeWarungId],
     queryFn: () => api.post('getRiwayatPencairan', { warungId: activeWarungId || "ALL" }).then(res => res?.data ?? []),
     enabled: !!activeWarungId,
-    staleTime: 1000 * 30, // 30s cache
+    staleTime: 0,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 
