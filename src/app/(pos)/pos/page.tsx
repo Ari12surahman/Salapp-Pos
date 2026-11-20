@@ -1936,7 +1936,7 @@ export default function PosPage() {
                         ⚠️ Mohon JANGAN tutup halaman ini atau keluar dari aplikasi sebelum pembayaran selesai.
                       </p>
 
-                      {pakasirData.qrString && (() => {
+                      {pakasirData.qrString ? (() => {
                         const isRetail = (paymentMethod || '').includes('alfa') || (paymentMethod || '').includes('indo');
                         const retailName = (paymentMethod || '').includes('alfa') ? 'Alfamart' : 'Indomaret';
                         return (
@@ -1956,9 +1956,9 @@ export default function PosPage() {
 
                             {isRetail && (
                               <div className="w-full text-left bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed mt-1">
-                                <p className="font-bold mb-1">🏪 Petunjuk Pembayaran Kasir ${retailName}:</p>
+                                <p className="font-bold mb-1">🏪 Petunjuk Pembayaran Kasir {retailName}:</p>
                                 <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-800">
-                                  <li>Kunjungi gerai <b>${retailName}</b> terdekat.</li>
+                                  <li>Kunjungi gerai <b>{retailName}</b> terdekat.</li>
                                   <li>Beri tahu kasir: <i>"Mau bayar tagihan merchant <b>LINKITA</b>"</i>.</li>
                                   <li>Tunjukkan / sebutkan <b>Kode Pembayaran</b> di atas ke kasir.</li>
                                   <li>Kasir akan menginput kode, bayar sesuai total dan simpan struknya.</li>
@@ -1967,7 +1967,12 @@ export default function PosPage() {
                             )}
                           </div>
                         );
-                      })()}
+                      })() : (
+                        <div className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+                          <p className="text-xs font-bold text-amber-900 mb-1">Kode Pembayaran Sedang Diproses Gateway</p>
+                          <p className="text-[11px] text-amber-700">Jika kode belum tampil, silakan klik tombol di bawah untuk memilih metode kembali.</p>
+                        </div>
+                      )}
 
                       <div className="w-full p-4 bg-blue-50/60 rounded-2xl flex justify-between items-center border border-blue-100">
                         <div className="text-left">
