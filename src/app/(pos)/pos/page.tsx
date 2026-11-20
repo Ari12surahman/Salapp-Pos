@@ -1596,7 +1596,7 @@ export default function PosPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0 shadow-xs">
-                        <img src="/banks/qris.svg" alt="QRIS" className="w-full h-full object-contain" />
+                        <img src={getBankLogo('qris')} alt="QRIS" className="w-full h-full object-contain" />
                       </div>
                       <div className="flex flex-col text-left">
                         <span className="text-base font-bold leading-tight">BAYAR QRIS</span>
@@ -1939,7 +1939,7 @@ export default function PosPage() {
                       {pakasirData.qrString && (
                         <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center">
                           <div className="w-20 h-12 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center mb-2 shadow-xs">
-                            <img src={getBankLogo(paymentMethod) || '/banks/bri.svg'} alt="Bank" className="w-full h-full object-contain" />
+                            <img src={getBankLogo(paymentMethod) || getBankLogo('bri_va')} alt="Bank" className="w-full h-full object-contain" />
                           </div>
                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{getBankDisplayName(paymentMethod)}</p>
                           <div className="text-3xl font-mono font-bold text-slate-900 tracking-wider break-all mb-4">{pakasirData.qrString}</div>
