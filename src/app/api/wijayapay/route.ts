@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 
       const d = resData.data || {};
       const isQRIS = codePayment === 'QRIS';
-      const vaNum = d.nomor_va || d.pay_code || '';
+      const vaNum = d.nomor_pembayaran || d.nomor_va || d.pay_code || '';
       const qrStr = d.qr_string || '';
       const qrImg = d.qr_image || '';
       const paymentCode = isQRIS ? qrStr : vaNum;
@@ -168,6 +168,7 @@ export async function POST(request: Request) {
       const paymentObj = {
         va_number: vaNum,
         payment_number: paymentCode,
+        nomor_pembayaran: vaNum,
         code: paymentCode,
         qr_string: qrStr,
         qr_image: qrImg,

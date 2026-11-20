@@ -1015,7 +1015,7 @@ export default function PosPage() {
 
       if (res?.status === 'success' && res.payment) {
         const paymentData = res.payment;
-        const qrString = paymentData.va_number || paymentData.qr_string || paymentData.checkout_url || null;
+        const qrString = paymentData.nomor_pembayaran || paymentData.va_number || paymentData.payment_number || paymentData.code || paymentData.qr_string || paymentData.checkout_url || null;
         const checkoutUrl = paymentData.checkout_url || paymentData.url || paymentData.how_to_pay_url;
         
         setPakasirTimeLeft(900);
