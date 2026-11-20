@@ -20,49 +20,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/lib/supabase";
 import { getPeriodStartDateWIB, getWIBDateStr } from "@/lib/api/supabaseServices";
 
-export const getBankLogo = (method: string) => {
-  const m = (method || '').toLowerCase();
-  if (m.includes('bca')) return '/banks/bca.png';
-  if (m.includes('mandiri')) return '/banks/mandiri.svg';
-  if (m.includes('bri')) return '/banks/bri.svg';
-  if (m.includes('bni')) return '/banks/bni.svg';
-  if (m.includes('bsi') || m.includes('bsm')) return '/banks/bsi.svg';
-  if (m.includes('cimb')) return '/banks/cimb.svg';
-  if (m.includes('permata')) return '/banks/permata.svg';
-  if (m.includes('danamon')) return '/banks/danamon.svg';
-  if (m.includes('maybank')) return '/banks/maybank.svg';
-  if (m.includes('ocbc')) return '/banks/ocbc.svg';
-  if (m.includes('muamalat')) return '/banks/muamalat.svg';
-  if (m.includes('neo') || m.includes('bnc')) return '/banks/neo.png';
-  if (m.includes('alfamart')) return '/banks/alfamart.png';
-  if (m.includes('indomaret')) return '/banks/indomaret.png';
-  if (m.includes('qris')) return '/banks/qris.svg';
-  return '/banks/bri.svg';
-};
-
-export const getBankDisplayName = (method: string) => {
-  const map: Record<string, string> = {
-    qris: 'QRIS Dinamis',
-    bca_va: 'Bank BCA',
-    mandiri_va: 'Bank Mandiri',
-    bri_va: 'Bank BRI',
-    bni_va: 'Bank BNI',
-    bsi_va: 'Bank Syariah Indonesia (BSI)',
-    cimb_niaga_va: 'Bank CIMB Niaga',
-    cimb_va: 'Bank CIMB Niaga',
-    danamon_va: 'Bank Danamon',
-    permata_va: 'Bank Permata',
-    maybank_va: 'Bank Maybank',
-    ocbc_va: 'Bank OCBC',
-    muamalat_va: 'Bank Muamalat',
-    bank_neo_va: 'Bank Neo Commerce (BNC)',
-    neo_va: 'Bank Neo Commerce (BNC)',
-    alfamart: 'Alfamart',
-    indomaret: 'Indomaret',
-    payment_link: 'Payment Link'
-  };
-  return map[method] || String(method || '').replace('_va', ' VA').toUpperCase();
-};
+import { getBankLogo, getBankDisplayName, VA_CHANNELS } from "@/lib/bankLogos";
+export { getBankLogo, getBankDisplayName, VA_CHANNELS };
 
 export default function PosPage() {
   const router = useRouter();
@@ -1667,22 +1626,7 @@ export default function PosPage() {
                     <Button variant="ghost" size="sm" onClick={() => setPakasirData({ ...pakasirData, step: 'CHOOSE_METHOD' })}>Kembali</Button>
                   </div>
                   
-                  {[
-                    { id: 'bca_va', name: 'Bank BCA', logo: '/banks/bca.png' },
-                    { id: 'mandiri_va', name: 'Bank Mandiri', logo: '/banks/mandiri.svg' },
-                    { id: 'bri_va', name: 'Bank BRI', logo: '/banks/bri.svg' },
-                    { id: 'bni_va', name: 'Bank BNI', logo: '/banks/bni.svg' },
-                    { id: 'bsi_va', name: 'Bank Syariah Indonesia (BSI)', logo: '/banks/bsi.svg' },
-                    { id: 'cimb_niaga_va', name: 'Bank CIMB Niaga', logo: '/banks/cimb.svg' },
-                    { id: 'permata_va', name: 'Bank Permata', logo: '/banks/permata.svg' },
-                    { id: 'danamon_va', name: 'Bank Danamon', logo: '/banks/danamon.svg' },
-                    { id: 'maybank_va', name: 'Bank Maybank', logo: '/banks/maybank.svg' },
-                    { id: 'ocbc_va', name: 'Bank OCBC', logo: '/banks/ocbc.svg' },
-                    { id: 'muamalat_va', name: 'Bank Muamalat', logo: '/banks/muamalat.svg' },
-                    { id: 'bank_neo_va', name: 'Bank Neo Commerce (BNC)', logo: '/banks/neo.png' },
-                    { id: 'alfamart', name: 'Alfamart', logo: '/banks/alfamart.png' },
-                    { id: 'indomaret', name: 'Indomaret', logo: '/banks/indomaret.png' },
-                  ].map((bank) => (
+                  {VA_CHANNELS.map((bank) => (
                     <button 
                       key={bank.id}
                       type="button"
@@ -1695,11 +1639,11 @@ export default function PosPage() {
                     >
                       <div className="flex items-center gap-3.5">
                         <div className="w-12 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-xs">
-                          <img src={bank.logo} alt={bank.name} className="w-full h-full object-contain" />
+                          <img src={getBankLogo(bank.id)} alt={bank.name} className="w-full h-full object-contain" />
                         </div>
                         <div>
                           <span className="font-bold text-foreground text-sm block group-hover:text-blue-600 transition-colors">{bank.name}</span>
-                          <span className="text-[11px] text-muted-foreground">Virtual Account Otomatis</span>
+                          <span className="text-[11px] text-muted-foreground">{bank.id.includes('alfa') || bank.id.includes('indo') ? 'Gerai Kasir Retail Otomatis' : 'Virtual Account Otomatis'}</span>
                         </div>
                       </div>
                       <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
@@ -2012,7 +1956,7 @@ export default function PosPage() {
                       <div className="w-full p-4 bg-blue-50/60 rounded-2xl flex justify-between items-center border border-blue-100">
                         <div className="text-left">
                           <p className="text-xs text-blue-600 font-medium">Total Pembayaran</p>
-                          <p className="text-xl font-extrabold text-blue-950">Rp {(getCartTotal() + 3000).toLocaleString("id-ID")}</p>
+                          <p className="text-xl font-extrabold text-blue-950">Rp {(getCartTotal() + (paymentMethod.includes('bca') ? 4700 : (paymentMethod.includes('alfamart') || paymentMethod.includes('indomaret')) ? 3000 : 3500)).toLocaleString("id-ID")}</p>
                         </div>
                         <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
                           <Loader2 className="w-4 h-4 animate-spin" /> Menunggu Transfer...
